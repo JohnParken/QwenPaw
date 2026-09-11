@@ -128,6 +128,10 @@ qwenpawmail-mcp = "qwenpawmail_mcp.__main__:main"
 # Legacy group "copaw.doctor" is still loaded when present.
 
 [project.optional-dependencies]
+cloud = [
+    "fastapi>=0.115,<1",
+    "psycopg[binary]>=3.2,<4",
+]
 test = [
     "pytest>=8.3.5",
     "pytest-asyncio>=0.23.0",

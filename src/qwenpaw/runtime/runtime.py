@@ -43,9 +43,14 @@ class Runtime:
         *,
         workspace: Any,
         app_services: Any,
+        builder_factory: Any = None,
+        strict_lifecycle: bool = False,
     ) -> None:
         self.workspace = workspace
         self.app_services = app_services
+        # Trusted embedding seam; never populated from request/config JSON.
+        self.builder_factory = builder_factory or AgentBuilder
+        self.strict_lifecycle = strict_lifecycle
 
     async def run(  # pylint: disable=too-many-branches,too-many-statements
         self,
@@ -100,7 +105,7 @@ class Runtime:
 
             if not skip_agent:
                 # --- [fixed 2] build agent ---
-                builder = AgentBuilder(
+                builder = self.builder_factory(
                     app_services=self.app_services,
                 )
                 ctx.agent = await builder.build(ctx)
@@ -212,6 +217,8 @@ class Runtime:
                 try:
                     await agent.close()
                 except Exception:  # pylint: disable=broad-except
+                    if self.strict_lifecycle:
+                        raise
                     logger.warning(
                         "runtime: agent.close() failed session=%s",
                         getattr(ctx, "session_id", ""),

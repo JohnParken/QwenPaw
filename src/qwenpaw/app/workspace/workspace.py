@@ -414,6 +414,9 @@ class Workspace:
     async def stream_query(
         self,
         request: Any,
+        *,
+        builder_factory: Any = None,
+        strict_lifecycle: bool = False,
     ) -> AsyncGenerator[Any, None]:
         """Process a request through the Runtime pipeline.
 
@@ -450,7 +453,12 @@ class Workspace:
 
         from ...runtime import Runtime
 
-        rt = Runtime(workspace=self, app_services=self._app_services)
+        rt = Runtime(
+            workspace=self,
+            app_services=self._app_services,
+            builder_factory=builder_factory,
+            strict_lifecycle=strict_lifecycle,
+        )
         async for item in rt.run(request):
             yield item
 
