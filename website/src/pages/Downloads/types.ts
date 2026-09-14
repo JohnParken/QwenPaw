@@ -23,7 +23,7 @@ export interface PlatformData {
   versions: string[];
 }
 
-export interface DesktopIndex {
+export interface ProductIndex {
   product: string;
   updated_at: string;
   platforms: Record<string, PlatformData>;

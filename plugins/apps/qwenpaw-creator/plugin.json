@@ -394,18 +394,6 @@
             "default": 600,
             "min": 30,
             "max": 3600
-          },
-          {
-            "name": "computer_use_enabled",
-            "label": "Desktop Operation Enabled",
-            "type": "select",
-            "required": false,
-            "default": "false",
-            "options": [
-              "true",
-              "false"
-            ],
-            "help": "Lets the agent operate desktop apps via the native Computer Use runtime (Windows/macOS desktop host only). Off by default. This switch does not bypass QwenPaw Computer Use grants or OS Accessibility and Screen Recording permissions."
           }
         ]
       },

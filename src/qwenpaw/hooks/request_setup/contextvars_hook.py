@@ -18,7 +18,6 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
-import uuid
 
 from ..base import LifecycleHook
 from ...runtime.hooks import HookAction, HookContext, HookResult
@@ -81,9 +80,6 @@ class ContextVarsSetupHook(LifecycleHook):
         set_current_root_session_id(
             ctx.root_session_id or ctx.session_id or "",
         )
-        from ...app.computer_use import set_current_computer_use_turn_id
-
-        set_current_computer_use_turn_id(uuid.uuid4().hex)
         set_current_user_id(ctx.request.user_id)
         set_current_channel(getattr(ctx.request, "channel", None))
         request_context = getattr(ctx.request, "request_context", None)

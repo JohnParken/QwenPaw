@@ -10,7 +10,10 @@ volumes:
 
 services:
   qwenpaw:
-    image: agentscope/qwenpaw:latest
+    image: qwenpaw-web:local
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.web
     init: true
     container_name: qwenpaw
     restart: always

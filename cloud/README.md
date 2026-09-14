@@ -1,5 +1,9 @@
 # P0 多用户 Harness（macos-dev）
 
+> PC Web / 无头运行部署及依赖精简见
+> [云端 Runner / PC Web 精简](../docs/design/Cloud_Web_Slimming.md)。
+> 本文及 `requirements.lock` 保留原 P0 验收基线，不能视为精简后的验收结果。
+
 实施范围以 `docs/design/QwenPaw_Multiuser_Harness_Implementation_Baseline_v5.md` 第 20.3 节为准。入口与桌面 Hub/Console 分离；采用真实 PostgreSQL、独立 Core/File API/单槽 Worker、整个 Runner 的 Seatbelt 边界、离线模型与 NullMemory。所有数据均为合成测试数据。
 
 ## 使用 uv 重建环境

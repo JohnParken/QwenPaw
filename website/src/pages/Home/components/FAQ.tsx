@@ -63,7 +63,6 @@ export function FAQ() {
             <>
               <p>{t("homeFaq.quickStart.install.p1")}</p>
               <ul className="mt-2 list-disc space-y-1 pl-5">
-                <li>{t("homeFaq.quickStart.install.li1")}</li>
                 <li>{t("homeFaq.quickStart.install.li2")}</li>
                 <li>{t("homeFaq.quickStart.install.li3")}</li>
                 <li>{t("homeFaq.quickStart.install.li4")}</li>
@@ -97,25 +96,6 @@ export function FAQ() {
                 </li>
                 <li>{t("homeFaq.quickStart.update.li3")}</li>
                 <li>{t("homeFaq.quickStart.update.li4")}</li>
-                <li>
-                  {t("homeFaq.quickStart.update.li5Prefix")}
-                  <ul className="mt-1 list-disc space-y-1 pl-5">
-                    <li>{t("homeFaq.quickStart.update.li5a")}</li>
-                    <li>
-                      {t("homeFaq.quickStart.update.li5bPrefix")}{" "}
-                      <a
-                        href="https://github.com/agentscope-ai/QwenPaw/releases"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-(--color-primary) no-underline transition hover:brightness-110"
-                      >
-                        {t("homeFaq.quickStart.update.li5bLink")}
-                      </a>
-                      {t("homeFaq.quickStart.update.li5bSuffix")}
-                    </li>
-                    <li>{t("homeFaq.quickStart.update.li5c")}</li>
-                  </ul>
-                </li>
               </ul>
               <p className="mt-2">{t("homeFaq.quickStart.update.p2")}</p>
             </>

@@ -1,3 +1,7 @@
+> This branch defaults to a headless Web/agent runtime. See the
+> [cloud deployment and dependency guide](docs/design/Cloud_Web_Slimming.md)
+> for optional desktop, channel, and local-model dependencies.
+
 <div align="center">
 
 # QwenPaw
@@ -39,7 +43,7 @@ Your personal AI assistant — deploy locally or in the cloud, extend with Skill
 | **Multi-agent & parallel**              | Spawn independent agents with their own memory and skills. Sub-agents at runtime. Agent Communication Protocol (ACP) for cross-system orchestration.                               |
 | **File workspace**                      | Unified file navigation, preview, editing, diffs, upload, and download across project and Agent files.                                                                            |
 | **Extensible**                          | Skills for scheduling, documents, browser, news, and more. Plugin architecture with a marketplace. MCP integration for external tools. Combine them into purpose-built workflows.  |
-| **Reachable anywhere**                  | DingTalk, Lark, WeChat, Discord, Telegram, iMessage, QQ — one instance, all channels. Console, TUI, and desktop app for direct access.                                            |
+| **Reachable anywhere**                  | DingTalk, Lark, WeChat, Discord, Telegram, iMessage, QQ — one instance, all channels. Console and TUI provide direct access.                                            |
 | **Yours, not ours**                     | Deploy locally — data stays on your machine. No third-party hosting, no data upload.                                                                                               |
 
 <details>
@@ -282,49 +286,6 @@ To run QwenPaw on Alibaba Cloud (ECS), use the one-click deployment: open the [Q
 
 ---
 
-### Option 7: Desktop Application (Beta)
-
-> **Beta Notice**: The desktop application is currently in Beta testing phase with the following known limitations:
-> - **Incomplete compatibility testing**: Not fully tested across all system versions and hardware configurations
-> - **Potential performance issues**: Startup time, memory usage, and other performance aspects may need further optimization
-> - **Features under development**: Some features may be unstable or missing
-
-If you're not comfortable with command-line tools, you can download and use QwenPaw's desktop application without manually configuring Python environments or running commands.
-
-#### Download
-
-Download the desktop app (Tauri build) from [the official download page](https://qwenpaw.agentscope.io/downloads):
-- **Windows**: `QwenPaw-Tauri-<version>-Windows-setup.exe`
-- **macOS**: `QwenPaw-Tauri-<version>-macOS.zip` (Apple Silicon recommended)
-
-#### Features
-
-- ✅ **Zero configuration**: Download and double-click to run, no need to install Python or configure environment variables
-- ✅ **Cross-platform**: Supports Windows 10+ and macOS 14+
-- ✅ **Visual interface**: Automatically opens the app window, no need to manually enter addresses
-- ⚠️ **Beta stage**: Features are continuously being improved, feedback welcome
-
-#### First Launch
-
-**Important**: The first launch may take 10-60 seconds (depending on your system configuration). The application needs to initialize the Python environment and load dependencies. Please wait patiently for the window to open automatically.
-
-#### macOS: Bypass System Security Restrictions
-
-When you download the QwenPaw macOS app from Releases, macOS may show: *"Apple cannot verify that 'QwenPaw' contains no malicious software"*. This happens because the app is not notarized. You can still open it as follows:
-
-- **Right-click to open (recommended)**
-  Right-click (or Control+click) the QwenPaw app → **Open** → in the dialog click **Open** again. This tells Gatekeeper you trust the app; after that you can double-click to launch as usual.
-
-- **Allow in System Settings**
-  If it is still blocked, go to **System Settings → Privacy & Security**, scroll to the message like *"QwenPaw was blocked because it is from an unidentified developer"*, and click **Open Anyway** or **Allow**.
-
-- **Remove quarantine attribute (not recommended for most users)**
-  In Terminal run:
-  `xattr -cr "/Applications/QwenPaw Desktop.app"`
-  (or use the path to the `.app` after unzipping). This clears the "downloaded from the internet" quarantine flag so the warning usually does not appear, but is less safe and controllable than using **Right-click → Open**.
-
-For detailed usage instructions, troubleshooting, and common issues, see the [Desktop Application Guide](https://qwenpaw.agentscope.io/docs/desktop).
-
 ---
 
 ### What's Next?
@@ -404,7 +365,6 @@ See [Security](https://qwenpaw.agentscope.io/docs/security) for details.
 | [Quick start](https://qwenpaw.agentscope.io/docs/quickstart)            | Install and run (local or ModelScope Studio)    |
 | [Console](https://qwenpaw.agentscope.io/docs/console)                   | Web UI: chat and agent configuration            |
 | [Terminal UI (TUI)](https://qwenpaw.agentscope.io/docs/tui)             | Full-screen terminal chat, same agent as Console |
-| [Desktop App](https://qwenpaw.agentscope.io/docs/desktop)               | Desktop application installation and usage       |
 | [Models](https://qwenpaw.agentscope.io/docs/models)                     | Configure cloud, local, and custom providers    |
 | [Channels](https://qwenpaw.agentscope.io/docs/channels)                  | DingTalk, Lark, QQ, Discord, iMessage, and more |
 | [Skills](https://qwenpaw.agentscope.io/docs/skills)                      | Extend and customize capabilities               |
@@ -443,7 +403,7 @@ For common questions, troubleshooting tips, and known issues, please visit the *
 | Area                            | Item                                                                   | Status               |
 | ------------------------------- | ---------------------------------------------------------------------- | -------------------- |
 | **Horizontal Expansion**        | More channels, models, skills, and MCPs                                | Seeking Contributors |
-| **Existing Feature Extension**  | Display, download, and Windows improvements                            | Seeking Contributors |
+| **Existing Feature Extension**  | Console display and interaction improvements                            | Seeking Contributors |
 | **Models**                      | Multi-model switching                                                  | In Progress          |
 | **Safety & Approval**           | Batch preview and approval                                              | In Progress          |
 | **Automation**                  | Automated tasks                                                         | In Progress          |
@@ -453,7 +413,6 @@ For common questions, troubleshooting tips, and known issues, please visit the *
 | **Context**                     | System prompt compression                                               | In Progress          |
 | **Tooling**                     | Multi-location file changes                                             | In Progress          |
 |                                 | Persistent terminals and background tasks                              | In Progress          |
-| **Computer-use**                | On-screen target detection and actions                                  | In Progress          |
 | **Voice Interaction**           | Real-time voice tasks                                                   | In Progress          |
 | **Context Management & Memory** | Hot-swappable vector models and storage                                 | In Progress          |
 |                                 | Personal knowledge base                                                 | In Progress          |
@@ -538,7 +497,7 @@ QwenPaw collects **anonymous** usage data during `qwenpaw init` to help us under
 **What we collect:**
 
 - QwenPaw version (e.g., 1.1.12)
-- Install method (pip, Docker, or desktop app)
+- Install method (pip, script, Docker, or cloud deployment)
 - OS and version (e.g., macOS 14.0, Ubuntu 22.04)
 - Python version (e.g., 3.13)
 - CPU architecture (e.g., x86_64, arm64)

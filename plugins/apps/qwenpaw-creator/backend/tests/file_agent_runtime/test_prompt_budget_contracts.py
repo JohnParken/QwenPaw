@@ -3,13 +3,9 @@
 
 from __future__ import annotations
 
-import sys
-from types import SimpleNamespace
-
 import pytest
 
 from services.file_agent_runtime.prompts import load_file_agent_prompt
-from services.file_agent_runtime.prompts import live_operation_guidance
 
 pytestmark = pytest.mark.unit
 
@@ -36,26 +32,3 @@ def test_prompts_preserve_explicit_paid_image_ceiling(
 ) -> None:
     prompt = load_file_agent_prompt(prompt_name)
     assert all(contract in prompt for contract in required_contracts)
-
-
-def test_computer_use_manual_follows_the_loaded_plugin(tmp_path, monkeypatch):
-    bundle = tmp_path / "computer-use"
-    package = bundle / "computer_use"
-    skill = bundle / "skills" / "computer_use" / "SKILL.md"
-    package.mkdir(parents=True)
-    skill.parent.mkdir(parents=True)
-    module_file = package / "__init__.py"
-    module_file.write_text("", encoding="utf-8")
-    skill.write_text(
-        "---\nname: computer_use\n---\nNative manual",
-        encoding="utf-8",
-    )
-    monkeypatch.setitem(
-        sys.modules,
-        "computer_use",
-        SimpleNamespace(__file__=str(module_file)),
-    )
-    monkeypatch.setattr(live_operation_guidance, "_skill_root", lambda: None)
-
-    manual = live_operation_guidance.load_host_computer_use_manual()
-    assert manual == "Native manual"

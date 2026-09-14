@@ -1,21 +1,19 @@
 /**
- * Cross-runtime external link opener for browser, legacy pywebview, and Tauri.
- * It validates supported protocols and delegates desktop shells to native openers.
+ * External link opener for browser and the legacy pywebview shell.
+ * It validates supported protocols before handing links to an opener.
  */
-import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getPyWebViewApi } from "./pywebview";
 
 const URL_WITH_SCHEME_RE = /^[a-z][a-z\d+\-.]*:/i;
 const HTTP_PROTOCOLS = new Set(["http:", "https:"]);
-// Keep in sync with console/src-tauri/src/external_link.rs.
+// Validate external links before opening them from the Web console.
 const SUPPORTED_EXTERNAL_PROTOCOLS = new Set([
   "http:",
   "https:",
   "mailto:",
   "tel:",
 ]);
-const TAURI_OPEN_EXTERNAL_LINK_COMMAND = "open_external_link";
-type ExternalLinkRuntime = "pywebview" | "tauri" | "browser";
+type ExternalLinkRuntime = "pywebview" | "browser";
 
 function hasHttpUrlPrefix(url: string): boolean {
   return /^https?:\/\//i.test(url);
@@ -73,35 +71,11 @@ export function resolveSupportedExternalUrl(url: string): string | null {
   return resolvedUrl;
 }
 
-/** Detect Tauri even after the app has navigated to the backend-hosted console. */
-export function isDesktopTauriRuntime(): boolean {
-  // When Tauri loads a remote-origin console, injected internals can still be
-  // available even when the SDK helper does not report the runtime.
-  return isTauri() || hasTauriInternals();
-}
-
-/** Check for Tauri's injected invoke hook when the SDK helper is unavailable. */
-function hasTauriInternals(): boolean {
-  if (typeof window === "undefined") return false;
-
-  return (
-    typeof (window as { __TAURI_INTERNALS__?: { invoke?: unknown } })
-      .__TAURI_INTERNALS__?.invoke === "function"
-  );
-}
-
-// Runtime priority is intentional: the legacy pywebview bridge has its own
-// opener, while packaged Tauri should use the native command exposed to the
-// WebView, including backend-hosted remote origins allowed by capabilities.
 /** Choose which runtime should handle a validated external URL. */
 function detectExternalLinkRuntime(fullUrl: string): ExternalLinkRuntime {
   const pywebviewApi = getPyWebViewApi();
   if (pywebviewApi?.open_external_link && isHttpExternalUrl(fullUrl)) {
     return "pywebview";
-  }
-
-  if (isDesktopTauriRuntime()) {
-    return "tauri";
   }
 
   return "browser";
@@ -129,14 +103,6 @@ export function openExternalLink(
   switch (runtime) {
     case "pywebview": {
       getPyWebViewApi()?.open_external_link?.(fullUrl);
-      return;
-    }
-    case "tauri": {
-      void invoke(TAURI_OPEN_EXTERNAL_LINK_COMMAND, { url: fullUrl }).catch(
-        (error) => {
-          console.warn("[external-link] Tauri open command failed", error);
-        },
-      );
       return;
     }
     case "browser":

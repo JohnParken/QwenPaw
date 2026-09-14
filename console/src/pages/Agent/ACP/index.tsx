@@ -12,7 +12,6 @@ import {
   type ACPNodeRuntimeStatus,
 } from "../../../api/types";
 import { useAgentStore } from "../../../stores/agentStore";
-import { isDesktopTauriRuntime } from "../../../utils/openExternalLink";
 import { parseErrorDetail } from "../../../utils/error";
 import { ACPCard } from "./components/ACPCard";
 import {
@@ -222,17 +221,6 @@ function ACPPage() {
   );
 
   const pickNodePath = useCallback(async () => {
-    if (isDesktopTauriRuntime()) {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const selected = await open({
-        multiple: false,
-        directory: false,
-        title: t("acp.selectNodePath"),
-      });
-      if (Array.isArray(selected)) return selected[0] || null;
-      return selected || null;
-    }
-
     const value = window.prompt(
       t("acp.nodePathPrompt"),
       nodeRuntime?.effective_node_path || "",

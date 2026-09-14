@@ -1,8 +1,6 @@
 #!/bin/sh
-# QwenPaw Creator entrypoint.
-# 1. Auto-install bundled Creator plugin if not already present.
-# 2. Substitute port in supervisord template.
-# 3. Start supervisord (which manages app + xvfb + xfce4).
+# Start the headless Web/agent service directly so it receives stop signals.
+# Default port 8088; override at runtime with -e QWENPAW_PORT=3000.
 set -e
 
 is_auth_enabled() {
@@ -22,7 +20,7 @@ warn_if_auth_off_container_bind() {
 
   cat >&2 <<EOF
 ============================================================
-SECURITY NOTICE: QwenPaw Creator is running in Docker without authentication.
+SECURITY NOTICE: QwenPaw is running in Docker without authentication.
 
 QwenPaw cannot verify whether access to the service is limited to a trusted
 network. Anyone who can reach the service may access QwenPaw APIs without login.
@@ -45,27 +43,6 @@ else
   echo "✓ Config found in ${QWENPAW_WORKING_DIR}, skipping initialization."
 fi
 
-# Auto-install bundled Creator plugin if not already present.
-# Set CREATOR_FORCE_PLUGIN_UPDATE=true to force overwrite existing plugins.
-if [ -d "/app/bundled-plugins/qwenpaw-creator" ]; then
-  case "${QWENPAW_WORKING_DIR}" in
-    ""|"/") echo "ERROR: QWENPAW_WORKING_DIR is unset or /" >&2; exit 1 ;;
-  esac
-  if [ "${CREATOR_FORCE_PLUGIN_UPDATE:-}" = "true" ] || [ ! -d "${QWENPAW_WORKING_DIR}/plugins/qwenpaw-creator" ]; then
-    echo "📦 Installing bundled Creator plugin..."
-    mkdir -p "${QWENPAW_WORKING_DIR}/plugins"
-    rm -rf "${QWENPAW_WORKING_DIR}/plugins/qwenpaw-creator"
-    cp -r /app/bundled-plugins/qwenpaw-creator "${QWENPAW_WORKING_DIR}/plugins/"
-    CREATOR_VERSION=$(python3 -c "import json;print(json.load(open('/app/bundled-plugins/qwenpaw-creator/plugin.json'))['version'])" 2>/dev/null || echo "unknown")
-    echo "✅ Creator plugin v${CREATOR_VERSION} installed."
-  else
-    echo "✓ Creator plugin already installed (set CREATOR_FORCE_PLUGIN_UPDATE=true to overwrite)."
-  fi
-else
-  echo "✓ Creator plugin not bundled."
-fi
-
 export QWENPAW_PORT="${QWENPAW_PORT:-8088}"
 warn_if_auth_off_container_bind
-
 exec qwenpaw app --host 0.0.0.0 --port "${QWENPAW_PORT}"

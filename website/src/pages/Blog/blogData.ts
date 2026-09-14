@@ -73,11 +73,6 @@ export const BLOG_POSTS: BlogPostMeta[] = [
       "https://img.alicdn.com/imgextra/i2/O1CN01IHOJzn1Jm6wO0Jy9L_!!6000000001070-2-tps-1224-696.png",
   },
   {
-    slug: "play-with-qwenpaw-pet",
-    cover:
-      "https://img.alicdn.com/imgextra/i3/O1CN01eC3Ngx1Tzz5zy5VCX_!!6000000002454-2-tps-1536-1024.png",
-  },
-  {
     slug: "paw-git",
     cover:
       "https://img.alicdn.com/imgextra/i2/O1CN01cdSRbU26gXIFiTRjL_!!6000000007691-2-tps-1254-1254.png",

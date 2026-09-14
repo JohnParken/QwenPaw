@@ -15,7 +15,6 @@
 | **Context**                     | System prompt compression                   | In Progress          |
 | **Tooling**                     | Multi-location file changes                 | In Progress          |
 |                                 | Persistent terminals and background tasks   | In Progress          |
-| **Computer-use**                | On-screen target detection and actions      | In Progress          |
 | **Voice Interaction**           | Real-time voice tasks                       | In Progress          |
 | **Context Management & Memory** | Hot-swappable vector models and storage     | In Progress          |
 |                                 | Personal knowledge base                     | In Progress          |

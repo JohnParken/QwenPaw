@@ -1699,8 +1699,7 @@
       "review_scene": "检查剪辑场景",
       "view_skill": "查阅创作指南",
       "ground_image_objects": "识别画面对象",
-      "browser_use": "操作网页",
-      "computer_use": "操作桌面应用"
+      "browser_use": "操作网页"
     },
     "skillGuides": {
       "visualDesign": "查阅视觉设计指南",
@@ -1758,8 +1757,7 @@
       "review_scene": "正在检查剪辑场景…",
       "view_skill": "正在查阅创作指南…",
       "ground_image_objects": "正在识别画面对象…",
-      "browser_use": "正在操作网页…",
-      "computer_use": "正在操作桌面应用…"
+      "browser_use": "正在操作网页…"
     },
     "productionAssistant": "制作助手",
     "estimatedDurations": {

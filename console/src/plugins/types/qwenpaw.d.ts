@@ -1,7 +1,7 @@
 /**
  * plugins/types/qwenpaw.d.ts — stable public contract for plugin authors.
  *
- * Plugin TS projects (cloudpaw, qwenpaw-pet, …) should COPY this file into
+ * Plugin TypeScript projects should copy this file into
  * their own `qwenpaw-host.d.ts` and uncomment the `declare global` block at
  * the bottom. We intentionally do NOT re-export `IAgentScopeRuntimeWebUIOptions`
  * so the public surface stays stable across vendor upgrades.

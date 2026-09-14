@@ -104,8 +104,6 @@ docker run -p 127.0.0.1:8088:8088 \
   agentscope/qwenpaw:latest
 ```
 
-5. 如果你使用的是桌面版（Tauri 版），已内置应用内更新：应用启动时会自动检测新版本并在界面中提示，你可以选择「安装并重启」立即更新，或「稍后更新」在后台下载。也可从下载页手动获取最新版本：https://qwenpaw.agentscope.io/downloads
-
 升级后重启服务 qwenpaw app。
 
 原 CoPaw 用户升级 QwenPaw，下载最新的 QwenPaw 即可，无需做额外适配即可继续使用 CoPaw 时期的所有配置、记忆、技能等。
@@ -128,7 +126,7 @@ qwenpaw app
 
 ### Windows 端口 8088 冲突问题
 
-在 Windows 上，Hyper-V 和 WSL2 可能会保留某些端口范围，这可能与 QwenPaw 的默认端口 **8088** 冲突。此问题影响所有安装方式（pip 安装、脚本安装、Docker、桌面应用）。
+在 Windows 上，Hyper-V 和 WSL2 可能会保留某些端口范围，这可能与 QwenPaw 的默认端口 **8088** 冲突。此问题影响所有安装方式（pip 安装、脚本安装、Docker）。
 
 **症状：**
 
@@ -167,13 +165,6 @@ docker run -p 127.0.0.1:8090:8088 \
 ```
 
 然后在浏览器中打开 `http://127.0.0.1:8090/`。
-
-**Windows 桌面应用：**
-
-目前桌面应用默认使用 8088 端口。如果遇到此问题，可以：
-
-1. 改用终端运行 `qwenpaw app --port 8090`
-2. 或从 Windows 保留端口范围中排除 8088（需要管理员权限，可能影响其他服务）
 
 **进阶：防止 Windows 保留 8088 端口**
 

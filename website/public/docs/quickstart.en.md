@@ -10,7 +10,6 @@ This section describes multiple ways to install or start using QwenPaw:
 | **AgentScope Platform** | No local environment or quick trial           | Free after registration, no installation required, browser-based, with Beta and stable versions | Register an AgentScope Platform account |
 | **Alibaba Cloud ECS**   | Stable cloud operation                        | One-click deploy, stable and reliable                                                           | Alibaba Cloud account                   |
 | **ModelScope Studio**   | No local environment or quick trial           | One-click deploy, cloud running, no installation                                                | ModelScope account                      |
-| **Desktop app**         | Users unfamiliar with command line            | Double-click to use, graphical interface                                                        | None                                    |
 
 > 📖 Please read [Introduction](./intro) first. After installation and startup, check out [Console](./console).
 
@@ -250,47 +249,6 @@ through ModelScope Studio:
 **Important**: Set your Studio to **non-public**, or others may control your QwenPaw.
 
 ---
-
-## Option 7: Desktop application
-
-If you're not comfortable with command-line tools, you can download and use
-QwenPaw's desktop application without manually configuring Python environments
-or running commands.
-
-### Features
-
-- ✅ **Zero configuration**: Download and double-click to run, no need to install Python or configure environment variables
-- ✅ **Cross-platform**: Supports Windows 10+ and macOS 14+ (Apple Silicon recommended)
-- ✅ **Visual interface**: Automatically opens the app window, no need to manually enter addresses
-
-### Download and usage
-
-1. **Download the installer**
-   Go to [GitHub Releases](https://github.com/agentscope-ai/QwenPaw/releases) to download the Tauri build for your system:
-
-   - Windows: `QwenPaw-Tauri-<version>-Windows-setup.exe`
-   - macOS: `QwenPaw-Tauri-<version>-macOS.zip`
-
-2. **Install and launch**
-
-   - **Windows**: Double-click the `.exe` file to install following the wizard, then double-click the desktop shortcut to launch
-   - **macOS**: Extract the `.zip` to get `QwenPaw Desktop.app`, first time requires right-click and select "Open" to bypass system security restrictions
-
-3. **First launch note**
-   The first launch may take 10-60 seconds (depending on your system configuration).
-   The application needs to initialize the Python environment and load dependencies.
-   Please wait patiently for the window to open automatically.
-
-### Complete guide
-
-Desktop applications involve system permissions, security prompts, debug mode,
-and other details. Please see the **[Complete Desktop Application Guide](./desktop)**
-to learn about:
-
-- Windows two launch modes (Normal vs Debug)
-- macOS how to bypass system security restrictions (3 methods)
-- Common issues and solutions
-- Log viewing and issue reporting
 
 ---
 

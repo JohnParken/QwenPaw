@@ -2,9 +2,9 @@
 
 QwenPaw Hub lets a team use QwenPaw on a shared server. Team members sign in at one address, but each person gets their own QwenPaw with separate workspaces, settings, credentials, and conversations.
 
-If you only use QwenPaw on your own computer, keep using the desktop App. Deploy Hub only when you need to manage multiple users on a server.
+If you only use QwenPaw on your own computer, install QwenPaw locally. Deploy Hub only when you need to manage multiple users on a server.
 
-> QwenPaw Hub is available in non-desktop installations starting with QwenPaw 2.2.0. The desktop edition is the single-user App and does not include Hub. Earlier versions do not have the `qwenpaw hub` command.
+> QwenPaw Hub is available starting with QwenPaw 2.2.0. Earlier versions do not have the `qwenpaw hub` command.
 
 > Hub 2.2.0 is an early release intended only for internal teams whose members trust one another. Even with HTTPS and remote access configured, do not operate the current version as a public multi-tenant service for unknown users.
 
@@ -24,7 +24,7 @@ Hub is self-hosted software, not a cloud service operated by the QwenPaw team. T
 
 ## Install
 
-Hub requires a non-desktop installation of QwenPaw 2.2.0 or later. Install or upgrade the Python package with the Hub dependencies:
+Hub requires QwenPaw 2.2.0 or later. Install or upgrade the Python package with the Hub dependencies:
 
 ```bash
 pip install -U "qwenpaw[hub]"

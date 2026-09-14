@@ -11,6 +11,7 @@ import pytest
 from agentscope.message import Base64Source
 from PIL import Image
 
+from qwenpaw.runtime.tool_registry import ToolRegistry
 from qwenpaw.agents.tools.desktop_screenshot import (
     _tool_ok,
     _capture_macos_screencapture,
@@ -71,3 +72,17 @@ async def test_desktop_screenshot_freezes_local_image(tmp_path):
     first_data = result.content[0].source.data
     Image.new("RGB", (2, 2), color="blue").save(image_path)
     assert result.content[0].source.data == first_data
+
+
+def test_desktop_screenshot_not_enabled_by_default() -> None:
+    """Screenshot tool is opt-in and not surfaced without explicit allow."""
+    registry = ToolRegistry()
+    registry.register(desktop_screenshot._tool_descriptor)
+
+    default_names = {desc.name for desc in registry.filter()}
+    assert "desktop_screenshot" not in default_names
+
+    allowed_names = {
+        desc.name for desc in registry.filter(allowed={"desktop_screenshot"})
+    }
+    assert "desktop_screenshot" in allowed_names

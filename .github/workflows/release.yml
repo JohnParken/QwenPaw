@@ -4,10 +4,10 @@
 #   1. A maintainer creates a DRAFT GitHub Release (tag + notes), does NOT publish.
 #   2. They run this workflow (Actions ▸ Run workflow). It resolves the draft,
 #      pins every job to the draft's target commit, then builds + verifies ALL
-#      products in parallel (wheel / web verify / desktop win+mac / plugins).
+#      products in parallel (wheel / web verify / plugins).
 #   3. Only if EVERY prepare job is green does the publish phase run: PyPI,
-#      Docker, desktop (GitHub assets + OSS), plugins. The draft is flipped to
-#      published LAST. Post-publish (inline): promote the desktop latest/updater,
+#      Docker and plugins. The draft is flipped to
+#      published LAST. Post-publish (inline):
 #      deploy the website (stable/post only — skipped for betas), and open the
 #      Release Duty issue.
 #   4. If anything fails, nothing is published and the draft is left untouched
@@ -307,16 +307,6 @@ jobs:
           print(f"OK: tag normalizes to __version__ ({ver}).")
           PY
 
-      - name: Ensure release secrets present (skip on dry_run)
-        env:
-          QWENPAW_DASHSCOPE_API_KEY: ${{ secrets.QWENPAW_DASHSCOPE_API_KEY }}
-        run: |
-          if [ "${{ inputs.dry_run }}" != "true" ] && [ -z "${QWENPAW_DASHSCOPE_API_KEY:-}" ]; then
-            echo "::error::QWENPAW_DASHSCOPE_API_KEY is not set; desktop verification cannot validate the LLM chat round."
-            exit 1
-          fi
-          echo "Secret check OK (dry_run=${{ inputs.dry_run }})"
-
   # ── Prepare phase: build + verify everything, publish nothing ──────────────
   build-wheel:
     needs: [resolve]
@@ -388,13 +378,6 @@ jobs:
       # back to public images for the Docker health-check build.
       docker_node_image: ${{ inputs.dry_run && 'node:20-slim' || '' }}
       docker_uv_image: ${{ inputs.dry_run && 'ghcr.io/astral-sh/uv:latest' || '' }}
-    secrets: inherit
-
-  build-desktop:
-    needs: [resolve]
-    uses: ./.github/workflows/desktop-build.yml
-    with:
-      ref: ${{ needs.resolve.outputs.sha }}
     secrets: inherit
 
   build-plugins:
@@ -492,7 +475,7 @@ jobs:
             BUILD_ARGS+=(--build-arg "UV_IMAGE=${DOCKER_UV_IMAGE}")
           fi
           docker buildx build --platform linux/amd64,linux/arm64 \
-            -f deploy/Dockerfile \
+            -f deploy/Dockerfile.web \
             --build-arg QWENPAW_DISABLED_CHANNELS="${QWENPAW_DISABLED_CHANNELS}" \
             --build-arg \
             QWENPAW_MANAGED_RUNTIME_BOUNDARY_VERSION="${QWENPAW_VERSION}" \
@@ -510,7 +493,7 @@ jobs:
   # ── Gate: publish jobs below run only if every prepare job above is green ──
 
   publish-pypi:
-    needs: [resolve, build-wheel, verify-web, build-desktop, build-plugins, build-docker]
+    needs: [resolve, build-wheel, verify-web, build-plugins, build-docker]
     runs-on: ubuntu-latest
     steps:
       - name: Download dist artifacts
@@ -532,7 +515,7 @@ jobs:
           echo "DRY-RUN: would publish $(ls dist) to PyPI"
 
   push-docker:
-    needs: [resolve, build-wheel, verify-web, build-desktop, build-plugins, build-docker]
+    needs: [resolve, build-wheel, verify-web, build-plugins, build-docker]
     runs-on: ubuntu-latest
     env:
       ACR_REGISTRY: agentscope-registry.ap-southeast-1.cr.aliyuncs.com
@@ -613,17 +596,8 @@ jobs:
         run: |
           echo "DRY-RUN: would push the prebuilt Docker image for ${{ needs.resolve.outputs.tag }}"
 
-  publish-desktop:
-    needs: [resolve, build-wheel, verify-web, build-desktop, build-plugins, build-docker]
-    uses: ./.github/workflows/desktop-publish.yml
-    with:
-      tag: ${{ needs.resolve.outputs.tag }}
-      ref: ${{ needs.resolve.outputs.sha }}
-      dry_run: ${{ inputs.dry_run }}
-    secrets: inherit
-
   publish-plugins:
-    needs: [resolve, build-wheel, verify-web, build-desktop, build-plugins, build-docker]
+    needs: [resolve, build-wheel, verify-web, build-plugins, build-docker]
     runs-on: ubuntu-latest
     env:
       OSS_BUCKET: ${{ vars.OSS_BUCKET || 'qwenpaw-download' }}
@@ -723,7 +697,7 @@ jobs:
 
   # ── Finalize: flip the draft to published LAST (pinned to the built SHA) ────
   finalize:
-    needs: [resolve, publish-pypi, push-docker, publish-desktop, publish-plugins]
+    needs: [resolve, publish-pypi, push-docker, publish-plugins]
     runs-on: ubuntu-latest
     steps:
       - name: Publish the release
@@ -736,19 +710,6 @@ jobs:
           echo "Flipping draft $TAG -> published, pinned to $SHA"
           gh release edit "$TAG" --repo "$REPO" --draft=false --target "$SHA"
 
-  # ── Post-publish: promote desktop latest + updater manifest + index ─────────
-  # Runs only after the release is published, so the auto-updater is pointed at
-  # the new version only once the release actually exists.
-  promote-desktop:
-    needs: [resolve, finalize]
-    uses: ./.github/workflows/desktop-promote.yml
-    with:
-      tag: ${{ needs.resolve.outputs.tag }}
-      ref: ${{ needs.resolve.outputs.sha }}
-      dry_run: ${{ inputs.dry_run }}
-    secrets: inherit
-
-  # ── Post-publish: create the Release Duty verification issue (inline) ───────
   duty-issue:
     needs: [resolve, finalize]
     uses: ./.github/workflows/release-duty.yml

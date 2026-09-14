@@ -23,29 +23,8 @@ vi.mock("../contexts/ThemeContext", () => ({
   useTheme: () => ({ isDark: false }),
 }));
 
-vi.mock("../contexts/DesktopUpdateContext", () => ({
-  useDesktopUpdate: () => ({
-    phase: "idle",
-    isBackground: false,
-    hasUpdate: false,
-    supportsLaterInstall: false,
-    version: "",
-    body: "",
-    downloaded: 0,
-    total: null,
-    error: null,
-    installDownloaded: vi.fn(),
-    startBackgroundDownload: vi.fn(),
-    startInstall: vi.fn(),
-  }),
-}));
-
 vi.mock("../plugins/registry/Slot", () => ({
   Slot: ({ children }: { children: ReactNode }) => children,
-}));
-
-vi.mock("../tauri/backendRuntime", () => ({
-  isDesktopApp: () => false,
 }));
 
 import AppBrand from "./AppBrand";

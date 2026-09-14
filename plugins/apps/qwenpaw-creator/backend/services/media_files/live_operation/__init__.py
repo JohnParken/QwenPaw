@@ -8,10 +8,6 @@ from .bridge import (
     LiveOperationRun,
     run_browser_code,
 )
-from .desktop import (
-    computer_use_status,
-    run_computer_use_code,
-)
 from .screen_recorder import (
     ScreenRecorder,
     ffmpeg_available,
@@ -57,14 +53,12 @@ __all__ = [
     "Viewport",
     "build_image_records",
     "build_take_records",
-    "computer_use_status",
     "facts_within",
     "ffmpeg_available",
     "normalized_location",
     "project_location_to_canvas",
     "read_take_manifest",
     "run_browser_code",
-    "run_computer_use_code",
     "screen_capture_supported",
     "stable_id",
     "stage_and_publish_file",

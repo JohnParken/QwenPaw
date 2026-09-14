@@ -3,8 +3,7 @@
 # This dramatically reduces build time by reusing the official image which
 # already contains:
 #   - Python toolchain (python3, pip, venv, build-essential)
-#   - System tools (curl, git, supervisor, vim, gettext-base)
-#   - Desktop environment (xfce4, xvfb, dbus-x11)
+#   - System tools (curl, git) and a headless Web runtime
 #   - CJK fonts (fonts-wqy-zenhei, fonts-wqy-microhei)
 #   - Chromium and all Playwright runtime dependencies
 #   - QwenPaw host application and console frontend

@@ -1,6 +1,6 @@
 import { Puzzle } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { DesktopIndex } from "../types";
+import type { ProductIndex } from "../types";
 import {
   formatPlatformKindLabel,
   getFilesForPluginPlatform,
@@ -13,7 +13,7 @@ import { DownloadCard } from "./DownloadCard";
 import { PlatformGrid, ProductSection } from "./ProductSection";
 
 interface PluginsSectionProps {
-  pluginsIndex: DesktopIndex;
+  pluginsIndex: ProductIndex;
 }
 
 export function PluginsSection({ pluginsIndex }: PluginsSectionProps) {

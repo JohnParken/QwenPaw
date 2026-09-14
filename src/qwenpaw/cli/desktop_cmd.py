@@ -214,6 +214,11 @@ def desktop_cmd(
     """
     # Setup logger for desktop command (separate from backend subprocess)
     setup_logger(log_level)
+    if webview is None:
+        raise click.ClickException(
+            "Install desktop dependencies with: "
+            "pip install 'qwenpaw[desktop]'",
+        )
 
     # get_stable_port() returns (port, socket) — the socket is kept open
     # to hold the port until the subprocess is about to bind it, minimizing

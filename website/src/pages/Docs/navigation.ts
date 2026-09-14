@@ -14,7 +14,6 @@ export const DOC_GROUPS: DocGroup[] = [
     children: [
       { slug: "intro", titleKey: "docs.intro" },
       { slug: "quickstart", titleKey: "docs.quickstart" },
-      { slug: "desktop", titleKey: "docs.desktop" },
       { slug: "functiondemo", titleKey: "docs.demo" },
     ],
   },
@@ -71,7 +70,6 @@ export const DOC_GROUPS: DocGroup[] = [
     children: [
       { slug: "browser", titleKey: "docs.browser" },
       { slug: "chrome", titleKey: "docs.chrome" },
-      { slug: "computer-use", titleKey: "docs.computerUse" },
     ],
   },
   {

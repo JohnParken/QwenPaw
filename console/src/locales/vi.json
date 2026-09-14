@@ -47,18 +47,6 @@
     "chatGptAuthenticated": "Đã kết nối với ChatGPT",
     "cliAuthenticated": "{{type}} CLI đã xác thực"
   },
-  "desktop": {
-    "closeWindow": {
-      "title": "Đóng cửa sổ",
-      "description": "Bạn muốn thực hiện thao tác nào khi đóng cửa sổ? Thoát ứng dụng sẽ dừng tất cả tác vụ đang chạy và tác vụ đã lên lịch.",
-      "remember": "Ghi nhớ lựa chọn của tôi",
-      "showWindow": "Hiển thị cửa sổ",
-      "minimizeToTray": "Thu nhỏ xuống khay hệ thống",
-      "quitApp": "Thoát ứng dụng",
-      "preference": "Đóng cửa sổ",
-      "askEveryTime": "Hỏi mỗi lần"
-    }
-  },
   "chunkError": {
     "title": "Không thể tải trang",
     "subTitle": "Có thể do lỗi mạng hoặc ứng dụng vừa được cập nhật.",
@@ -299,8 +287,7 @@
     "newVersion": "Phiên bản mới: v{{version}}, nhấn để cập nhật",
     "updateModal": {
       "title": "Phiên bản mới: v{{version}}",
-      "viewReleases": "Xem ghi chú phát hành",
-      "close": "Đóng"
+      "viewReleases": "Xem ghi chú phát hành"
     },
     "settings": {
       "language": "Ngôn ngữ",
@@ -351,7 +338,6 @@
       "extension": "Cài đặt do tiện ích mở rộng cung cấp"
     },
     "appearanceAndLanguage": "Giao diện và ngôn ngữ",
-    "desktopApplication": "Ứng dụng máy tính",
     "languageHint": "Thay đổi ngôn ngữ giao diện trên thiết bị này.",
     "themeHint": "Dùng giao diện sáng, tối hoặc theo hệ thống.",
     "contentWidth": "Độ rộng tin nhắn",
@@ -370,7 +356,6 @@
     "displayExpanded": "Mở rộng tất cả",
     "displayProcessCollapsed": "Thu gọn quá trình",
     "displayResultCollapsed": "Thu gọn kết quả",
-    "closeBehaviorHint": "Chọn hành động khi đóng cửa sổ ứng dụng.",
     "desktopModeHint": "Mở không gian làm việc nhiều cửa sổ.",
     "open": "Mở",
     "fixedEntries": "Mục cố định",

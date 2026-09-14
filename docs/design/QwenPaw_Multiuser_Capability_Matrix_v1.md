@@ -82,7 +82,7 @@ macOS 开发配置只用于本地验证，不要求 VM 或 Docker；业务契约
 
 Shell 源码依据：[tool_adapter.py](../../src/qwenpaw/governance/tool_adapter.py#L215) 的 OFF 路径可不附加 sandbox_config，审批后也存在移除沙箱参数重试的路径。平台强制边界须独立于原生审批开关。Skills 只提供当前 Scope 的批准内容，无权改变工具权限。
 
-插件工具由 [`PawApp.register`](../../src/qwenpaw/pawapp/app.py#L748) 动态加入并按 owner 可撤销。仓库 bundle manifest 当前为 `chrome`、`cloudpaw`、`computer-use`、`omp-workflows`、`qwenpaw-pet`；其中明确注册 Agent tool 的是 `computer-use→computer_use`（见 [`plugin.py`](../../plugins/bundle/computer-use/plugin.py#L137)），其余能力按插件实际注册结果逐项盘点，未验证即拒绝。插件声明或名称不能替代隔离、取消、恢复证据。
+插件工具由 [`PawApp.register`](../../src/qwenpaw/pawapp/app.py#L748) 动态加入并按 owner 可撤销。仓库 bundle manifest 当前保留 `chrome`、`cloudpaw`、`omp-workflows`；能力按插件实际注册结果逐项盘点，未验证即拒绝。插件声明或名称不能替代隔离、取消、恢复证据。
 
 ## 内存后端清单与协议门槛
 

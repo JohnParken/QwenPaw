@@ -1,22 +1,16 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
 import {
   Check,
-  Cloud,
-  Container,
   Copy,
   FileText,
-  Monitor,
-  Terminal,
 } from "lucide-react";
 import {
   VectorIcon,
   FileCodeIcon,
   DddSubLevelIcon,
   AistorageIcon,
-  GitHubIcon,
   ModelIcon,
   AliyunIcon,
   AgentScopePlatformIcon,
@@ -24,7 +18,7 @@ import {
 import { sectionStyles } from "@/lib/utils";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 
-type InstallMethod = "pip" | "script" | "docker" | "cloud" | "desktop";
+type InstallMethod = "pip" | "script" | "docker" | "cloud";
 type ScriptPlatform = "mac" | "windows";
 type ScriptWindowsVariant = "cmd" | "ps";
 type CloudPlatform = "agentscope" | "aliyun" | "modelscope";
@@ -40,34 +34,18 @@ const MODELSCOPE_URL =
 const ALIYUN_ECS_URL =
   "https://computenest.console.aliyun.com/service/instance/create/cn-hangzhou?type=user&ServiceId=service-1ed84201799f40879884";
 const ALIYUN_DOC_URL = "https://developer.aliyun.com/article/1713682";
-const DESKTOP_RELEASES_URL =
-  "https://github.com/agentscope-ai/QwenPaw/releases";
-
 const METHOD_ORDER: InstallMethod[] = [
   "pip",
   "script",
   "docker",
   "cloud",
-  "desktop",
 ];
-
-const METHOD_LUCIDE_ICON: Record<
-  Exclude<InstallMethod, "pip">,
-  typeof Terminal
-> = {
-  script: Terminal,
-  docker: Container,
-  cloud: Cloud,
-  desktop: Monitor,
-};
 
 function MethodTabIcon({ method }: { method: InstallMethod }) {
   if (method === "pip") return <VectorIcon />;
   if (method === "script") return <FileCodeIcon />;
   if (method === "docker") return <DddSubLevelIcon />;
-  if (method === "cloud") return <AistorageIcon />;
-  const Icon = METHOD_LUCIDE_ICON[method];
-  return <Icon size={14} strokeWidth={2} className="shrink-0" aria-hidden />;
+  return <AistorageIcon />;
 }
 
 export const PIP_INSTALL_COMMANDS = [
@@ -225,7 +203,7 @@ function CodeBlock({
   );
 }
 
-export function QuickStart({ docsBase }: QuickStartProps) {
+export function QuickStart(_props: QuickStartProps) {
   const { t } = useTranslation();
   const [selectedMethod, setSelectedMethod] = useState<InstallMethod>("pip");
   const [scriptPlatform, setScriptPlatform] = useState<ScriptPlatform>("mac");
@@ -334,7 +312,7 @@ export function QuickStart({ docsBase }: QuickStartProps) {
                   layout
                   transition={{ duration: 0.3, ease: "easeInOut" }}
                 >
-                  <div className="grid grid-cols-2 gap-px bg-(--bg) pb-px sm:grid-cols-5">
+                  <div className="grid grid-cols-2 gap-px bg-(--bg) pb-px sm:grid-cols-4">
                     {METHOD_ORDER.map((method) => {
                       const active = method === selectedMethod;
                       return (
@@ -350,11 +328,6 @@ export function QuickStart({ docsBase }: QuickStartProps) {
                         >
                           <MethodTabIcon method={method} />
                           <span>{t(`quickstart.method.${method}`)}</span>
-                          {method === "desktop" ? (
-                            <span className="ml-1 h-4 rounded-xs bg-[#FFD8B8] px-1 py-px text-[9px] text-[#F46F02] sm:px-1 sm:text-[12px]">
-                              {t("quickstart.badgeBeta")}
-                            </span>
-                          ) : null}
                         </button>
                       );
                     })}
@@ -561,60 +534,6 @@ export function QuickStart({ docsBase }: QuickStartProps) {
                           </motion.div>
                         ) : null}
 
-                        {selectedMethod === "desktop" ? (
-                          <motion.div
-                            key="desktop"
-                            className="grid min-h-[220px] gap-3"
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -8 }}
-                            transition={{ duration: 0.2 }}
-                          >
-                            <div className="rounded-xl border border-[#ececec] bg-[#fafafa] p-4 md:p-5">
-                              <div className="mb-2 font-mono text-sm font-semibold tracking-[0.01em] text-(--color-text) md:text-[0.95rem]">
-                                {t("quickstart.desktop.platforms")}
-                              </div>
-                              <ul className="space-y-0.5 font-mono text-sm leading-6 text-(--color-text-secondary) md:text-[0.95rem] md:leading-7">
-                                <li>Windows 10+</li>
-                                <li>
-                                  macOS 14+ (Apple Silicon{" "}
-                                  {t("quickstart.desktop.recommended")})
-                                </li>
-                              </ul>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                              <a
-                                href={DESKTOP_RELEASES_URL}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-(--color-secondary) px-4 py-3 text-sm font-medium text-(--color-text) hover:brightness-105 md:px-5 md:py-3.5 md:text-[1.08rem]"
-                              >
-                                <GitHubIcon size={20} />
-                                <span>
-                                  {t("quickstart.desktop.downloadGithub")}
-                                </span>
-                                <span className="ml-0.5 rounded-xs bg-[#FFD8B8] px-1.5 py-0.5 text-[10px] font-semibold text-[#F46F02] sm:text-[11px]">
-                                  {t("quickstart.desktop.recommended")}
-                                </span>
-                              </a>
-                              <Link
-                                to="/downloads"
-                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-(--color-secondary) px-4 py-3 text-sm font-medium text-(--color-text) hover:brightness-105 md:px-5 md:py-3.5 md:text-[1.08rem]"
-                              >
-                                <Monitor size={20} aria-hidden />
-                                {t("quickstart.desktop.viewDownloads")}
-                              </Link>
-                            </div>
-                            <Link
-                              to={`${docsBase}/desktop`}
-                              className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#d9d9d9] bg-white px-4 py-2.5 text-sm font-medium text-[#6a6a6a] hover:bg-[#fafafa] md:px-5 md:py-3 md:text-[1.08rem]"
-                            >
-                              <FileText size={16} aria-hidden />
-                              {t("quickstart.desktop.viewGuide")}
-                            </Link>
-                          </motion.div>
-                        ) : null}
                       </AnimatePresence>
                     </div>
                   </motion.div>

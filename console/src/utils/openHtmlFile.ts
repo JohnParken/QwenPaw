@@ -1,9 +1,7 @@
-/** Open raw HTML in a new browser context across browser and desktop shells. */
-import { invoke } from "@tauri-apps/api/core";
+/** Open raw HTML in a new browser context in the browser or legacy shell. */
 import { buildAuthHeaders } from "../api/authHeaders";
 import { workspaceApi } from "../api/modules/workspace";
 import type { WorkspaceRoot } from "../features/files-workspace/types";
-import { isDesktopTauriRuntime } from "./openExternalLink";
 import { getPyWebViewApi } from "./pywebview";
 
 interface OpenHtmlFileOptions {
@@ -55,13 +53,6 @@ export function openHtmlFile(options: OpenHtmlFileOptions): void {
       .catch((error) =>
         console.warn("[html-preview] Native open failed", error),
       );
-    return;
-  }
-
-  if (workspaceBacked && isDesktopTauriRuntime()) {
-    void invoke("open_workspace_html", { url: resolverUrl, headers }).catch(
-      (error) => console.warn("[html-preview] Tauri open failed", error),
-    );
     return;
   }
 

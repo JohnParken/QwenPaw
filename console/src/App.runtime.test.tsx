@@ -12,7 +12,7 @@ vi.mock("./api/modules/hub", async (importOriginal) => {
   return { ...actual, hubApi: hubApiMock };
 });
 
-vi.mock("./tauri/BackendLoadingPage", () => ({
+vi.mock("./components/BackendLoadingPage", () => ({
   default: ({
     status,
     errorMessage,

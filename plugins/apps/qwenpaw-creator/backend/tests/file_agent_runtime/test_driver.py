@@ -441,24 +441,14 @@ def test_tool_manifest_gates_live_operation_on_config(monkeypatch):
         "get_live_operation_enabled",
         lambda: False,
     )
-    monkeypatch.setattr(
-        driver_module,
-        "get_computer_use_enabled",
-        lambda: False,
-    )
-    assert not {"browser_use", "computer_use"} & _names()
+    assert "browser_use" not in _names()
 
     monkeypatch.setattr(
         driver_module,
         "get_live_operation_enabled",
         lambda: True,
     )
-    monkeypatch.setattr(
-        driver_module,
-        "get_computer_use_enabled",
-        lambda: True,
-    )
-    assert {"browser_use", "computer_use"} <= _names()
+    assert "browser_use" in _names()
 
 
 def _run_browser_tool(runtime):

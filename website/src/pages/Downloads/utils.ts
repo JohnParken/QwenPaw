@@ -1,5 +1,5 @@
 import { KNOWN_PLUGIN_PLATFORM_KINDS } from "./constants";
-import type { DesktopIndex, FileMetadata, LocalizedText } from "./types";
+import type { FileMetadata, LocalizedText, ProductIndex } from "./types";
 
 export function pickLocalizedField(
   value: LocalizedText | undefined,
@@ -12,25 +12,6 @@ export function pickLocalizedField(
     return zh || en;
   }
   return en || zh;
-}
-
-export function normalizeDesktopDownloadMetadata(
-  file: FileMetadata,
-): FileMetadata {
-  const replaceDesktopClient = (value: string) =>
-    value.split("桌面客户端").join("桌面版");
-
-  return {
-    ...file,
-    name: {
-      ...file.name,
-      "zh-CN": replaceDesktopClient(file.name["zh-CN"]),
-    },
-    description: {
-      ...file.description,
-      "zh-CN": replaceDesktopClient(file.description["zh-CN"]),
-    },
-  };
 }
 
 export function isPreviewVersion(version: string): boolean {
@@ -119,29 +100,6 @@ export function groupFilesByPluginId(
     });
 }
 
-export function detectOS(): string | null {
-  const userAgent = window.navigator.userAgent.toLowerCase();
-  if (userAgent.includes("win")) return "win";
-  if (userAgent.includes("mac")) return "mac";
-  if (userAgent.includes("linux")) return "linux";
-  return null;
-}
-
-export function isRecommendedDesktopPlatform(
-  platform: string,
-  userOS: string | null,
-  availablePlatforms: string[],
-): boolean {
-  if (!userOS) return false;
-
-  const tauriPlatform = `${userOS}-tauri`;
-  if (availablePlatforms.includes(tauriPlatform)) {
-    return platform === tauriPlatform;
-  }
-
-  return platform === userOS;
-}
-
 export function formatPlatformKindLabel(kind: string): string {
   if (!kind) return "";
   return kind.charAt(0).toUpperCase() + kind.slice(1);
@@ -159,7 +117,7 @@ export function sortPluginPlatformKinds(kinds: string[]): string[] {
   });
 }
 
-export function getPluginPlatformKinds(index: DesktopIndex): string[] {
+export function getPluginPlatformKinds(index: ProductIndex): string[] {
   const kinds = new Set<string>();
   for (const key of Object.keys(index.platforms ?? {})) {
     kinds.add(key);
@@ -170,7 +128,7 @@ export function getPluginPlatformKinds(index: DesktopIndex): string[] {
   return sortPluginPlatformKinds([...kinds]);
 }
 export function getFilesForPluginPlatform(
-  index: DesktopIndex,
+  index: ProductIndex,
   platformKind: string,
 ): FileMetadata[] {
   const ids = new Set(index.platforms?.[platformKind]?.versions ?? []);

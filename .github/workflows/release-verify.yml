@@ -201,7 +201,7 @@ jobs:
             BUILD_ARGS="$BUILD_ARGS --build-arg UV_IMAGE=$DOCKER_UV_IMAGE"
           fi
           docker build \
-            -f deploy/Dockerfile \
+            -f deploy/Dockerfile.web \
             -t qwenpaw-verify:test \
             --build-arg \
             QWENPAW_MANAGED_RUNTIME_BOUNDARY_VERSION="$QWENPAW_VERSION" \
