@@ -59,11 +59,11 @@ cloud/accept.py --native \
 ## 未启用能力与 P1 差距
 
 - **ReMe 一致快照：UNSUPPORTED。** 六方法适配尚不存在，旁路调查已交付；P0 使用明确的 NullMemory，不把它记成 ReMe 集成通过。
-- **Linux 生产隔离：UNSUPPORTED / P1 待验。** cgroup、PID/net namespace、跨 Pod OOM、受控出口与生产宿主策略均不由 macOS 结果代替。
+- **Kylin P1 可信任务边界：UNSUPPORTED / P1 待验。** 目标已收敛为 Kylin Linux Advanced Server V10（Tercel）/Kubernetes v1.21.7 的单 Pod/Worker/Slot；Pod 资源、kubelet PID、NetworkPolicy、Attempt 清理与顺序不串数据均不由 macOS 结果代替。P1 不再要求任务级强沙箱，也不宣称支持不可信任意代码。
 - 原生工具范围仅 `write_marker`；真实模型、Shell、浏览器、MCP、外部副作用恢复、WAITING_INPUT、生产 Memory、自动 GC 均未启用，不计作 PASS。
 - P0 使用 32 个未结束 Run 的静态准入和 admission 行串行化事务，不提供生产公平调度/配额或吞吐结论。File API 小文件上传与 complete 合为一个同步端点，version 固定为 1。
 - 测试数据库及已用/未决引用保留，不自动删除；只有 Attempt 私有工作副本按清理协议销毁。数据库/文件环境重置须停服后显式进行，不能冒充 P2 补偿和 GC。
-- P1 需落实 Linux 测试环境、后端能力与部署打包；P2/P3 再完成生产身份、存储、配额、公平调度、运维 GC 与 Memory/通用恢复。
+- P1 需按 [可信 Kylin 执行边界](P1_Trusted_Kylin_Execution_Boundary.md) 落实 Linux profile、Worker 部署包、Pod 资源/安全上下文、受控网络、环境清理和验收报告；P2/P3 再完成生产身份、存储、配额、公平调度、运维 GC 与 Memory/通用恢复。
 
 ## Subagent execution record
 

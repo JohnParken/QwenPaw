@@ -38,6 +38,8 @@ close(deadline) -> Closed | CloseFailed
 
 Linux 生产 P0—P3 使用常驻单 Pod 单 Slot Worker 池，P4 多槽须另验。macos-dev 使用本机 Worker 进程/单 Slot，无虚拟机或 Pod 前置。单槽不取消 Runtime 与 Supervisor 的边界，也不保证物理隔离；任务前后仍销毁私有状态和进程。资源、网络和凭据约束不依赖原生工具审批开关。
 
+当前 P1 的 Linux profile 按 [Kylin V10 可信任务执行边界](P1_Trusted_Kylin_Execution_Boundary.md) 收敛：Runtime/Supervisor 仍保持进程、协议和权限职责分离，但不要求每 Attempt 的系统级强沙箱；实际执行边界是单 Slot Worker Pod 的资源/安全上下文/NetworkPolicy，以及 Attempt 私有目录和清理确认。该结论不适用于不可信用户或任意代码。
+
 ### 2.1 macos-dev 适配
 
 P0 执行子集以 [收敛后的开发清单](QwenPaw_Multiuser_Harness_Implementation_Baseline_v5.md#p0-readiness) 为准：02a/02b 分离网络协议和 fixture；03a/03b/03c 分离启动、隔离清理和真实 Runtime。必需 native 用例仅使用离线确定性模型、批准的本地文件工具、NullMemory 和完整回合边界；05b 验证在新 Worker 重建，不承诺本文件第 4/5 节的完整工具中途恢复或等待输入链路已实现。ReMe 六方法作为旁路调查，真实 DeepSeek 为可选联调；未验证能力保持关闭。本地取消/失联清理在 P0 必须验证，不能等到 P3 业务取消接入。

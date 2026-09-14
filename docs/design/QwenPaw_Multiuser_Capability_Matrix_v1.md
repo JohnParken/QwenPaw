@@ -2,6 +2,8 @@
 
 本文是拟实施门槛（2026-09-11），区分仓库事实与尚未实现的云端保证。盘点内置描述器、治理工具、部分插件与 Memory 注册表；这是初始静态清单，不宣称覆盖全部动态注册。LSP、外部插件目录和运行时注入必须由启动 inventory 补齐，未列工具/插件默认拒绝。依据基线 [第 13 节](QwenPaw_Multiuser_Harness_Implementation_Baseline_v5.md#s13)、[第 17 节](QwenPaw_Multiuser_Harness_Implementation_Baseline_v5.md#s17)、[第 20 节](QwenPaw_Multiuser_Harness_Implementation_Baseline_v5.md#s20)。
 
+P1 执行边界自 2026-09-14 起按 [Kylin V10 可信任务范围](P1_Trusted_Kylin_Execution_Boundary.md) 执行：单 Pod/Worker/Slot，以 Pod 资源/安全上下文、Pod 级网络和 Attempt 清理为边界，不要求任务级强沙箱，不宣称支持不可信任意代码。本矩阵中 Shell、Browser、MCP、Memory 与恢复的后续开放门槛不因该收敛而提前。
+
 ## 级别与默认门槛
 
 | 级别 | 本矩阵含义 | 默认 |
@@ -29,7 +31,7 @@ macOS 开发配置只用于本地验证，不要求 VM 或 Docker；业务契约
 | Worker/Slot | 一个进程 Worker、一个 Slot | 每个 Attempt 创建新进程及私有路径；不复用上一次 Attempt 的进程或临时目录 |
 | 原生隔离 | 真实 native Seatbelt task wrapper 仍待实现 | 未实现前不得宣称原生 Runner 或隔离已通过；禁止 raw native command fallback |
 | 覆盖测试 | native/fixture 测试覆盖 tenant、auth、run、idempotency、PG 并发、File API、checkpoint、memory、cancel、`WAITING_INPUT` | 默认 fixture/offline 测试，不使用真实 secrets；Mock-only 测试不能认证 native Runner 或隔离 |
-| Linux 专属边界 | cgroup、PID/net namespace、K8s NetworkPolicy、OOM isolation | macOS 不能通过这些项目，统一报告 `UNSUPPORTED`，不得报告 `PASS` |
+| Linux 专属边界 | P1 Pod CPU/内存/临时盘、kubelet PID、K8s NetworkPolicy、清理与顺序不串数据 | macOS 不能通过这些项目，统一报告 `UNSUPPORTED`，不得报告 `PASS`；任务级 PID/net namespace 不再是可信用户 P1 门槛 |
 | PostgreSQL | 本机真实 PG engine，或 SQL 测试使用远程测试 PG | 不得用 SQLite 替代实际 PG 引擎 |
 | 生产门槛 | P0–P3 Pod 规则仅适用于 `linux-production` | 不把 macOS 开发结果升级为生产隔离保证 |
 
@@ -68,7 +70,7 @@ macOS 开发配置只用于本地验证，不要求 VM 或 Docker；业务契约
 | SendFileToUser | P2 改接 Artifact 提交链路后开放 | 不直接复用原生渠道发送；稳定 commit_id 查回，停止传输不撤销已发布结果 |
 | WebSearch/WebFetch/ViewImage/ViewVideo | P2 只读子集，P3 恢复 | 本地文件限私有根，网络限受控出口，媒体解析在沙箱内；关闭连接不代表远程请求撤回 |
 | Browser | P3 只读 profile 验证后；写入/提交默认关闭 | 独占 profile、进程、出口；不恢复浏览器句柄，提交表单等未知效果转对账 |
-| Bash | P3 离线白名单场景；通用联网 Shell 默认关闭 | 强制子沙箱、清理进程树；不继承模型凭据/控制 FD；任意脚本不默认可重放 |
+| Bash | P3 离线白名单场景；通用联网 Shell 默认关闭 | 当前可信用户 P1 不开放；P3 若开放则需重新决定子沙箱、清理进程树、凭据/控制 FD 和重放边界 |
 | GetCurrentTime/GetTokenUsage | P2 范围绑定后开放 | 只读可重试；时间结果可以改变，Token 用量以 Core 为准 |
 | SetUserTimezone | 完成 Scope 配置适配前关闭 | 配置改写随 revision 提交，禁止修改跨用户全局配置 |
 | ListAgents | 完成当前 Scope 可见性过滤后开放 | 只列批准的配置与对象，不列其他用户 Agent |

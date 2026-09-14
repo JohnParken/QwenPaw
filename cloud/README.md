@@ -70,7 +70,7 @@ PYTHONPATH=src uv run --no-project --python .venv/bin/python -m qwenpaw_cloud wo
 PYTHONPATH=src uv run --no-project --python .venv/bin/python -m qwenpaw_cloud worker --config /private/tmp/qwenpaw-p0-example/worker-b.json
 ```
 
-Worker 配置拒绝 DSN 和服务签名密钥，只收到自身身份令牌与分配后获得的 Scope 文件能力。运行端不继承父进程代理、模型凭据、数据库环境或 FD。未通过 Seatbelt 的 native 启动不会降级成裸进程。可用 `--executor fixture` 生成明确标记的协议桩配置；fixture 不加载 QwenPaw，也不计入真实 Runtime 验收。
+Worker 配置拒绝 DSN 和服务签名密钥，只收到自身身份令牌与分配后获得的 Scope 文件能力。运行端不继承父进程代理、模型凭据、数据库环境或 FD。P0 未通过 Seatbelt 的 native 启动不会降级成裸进程。可用 `--executor fixture` 生成明确标记的协议桩配置；fixture 不加载 QwenPaw，也不计入真实 Runtime 验收。P1 在 Kylin V10（Tercel）/Kubernetes v1.21.7 上改用可信任务 Pod 边界，不沿用 Seatbelt，也不要求任务级强沙箱；范围见 [P1 执行边界](../docs/design/P1_Trusted_Kylin_Execution_Boundary.md)。
 
 ## 复跑验收
 
@@ -99,4 +99,4 @@ PYTHONPATH=src uv run --no-project --python .venv/bin/python cloud/accept.py --n
 
 不启用模型联网、Shell/浏览器/MCP、插件安装、WAITING_INPUT、通用外部副作用恢复或自动 GC。失租恢复仅适用于此无外部副作用、私有文件且发布受 fencing 保护的固定 profile。未决与已用引用全部保留；清理只销毁 Attempt 工作副本，不删除业务引用。测试后先停服务，再显式重置专用测试环境；不以重置代替 P2 GC/补偿验收。
 
-Linux cgroup、PID/net namespace、跨 Pod 资源隔离、生产身份/存储、长期 Memory、业务取消/暂停链路、完整公平调度与发布打包属于后续。Seatbelt 仅声明已测试的文件/网络边界及受控后代清理，不提供 Linux 级资源硬隔离。ReMe 调查结果见 `cloud/reports/reme-investigation.md`，不以 NullMemory 的通过结果声称 ReMe 已支持恢复。
+P1 已收敛为 Kylin Linux Advanced Server V10（Tercel）/Kubernetes v1.21.7 的单 Pod/Worker/Slot：验证 Pod CPU/内存/临时盘、kubelet PID 限制、显式 seccomp 与最小权限、Pod 级 NetworkPolicy、Attempt 私有环境、进程/目录清理和失败停用 Worker。P1 仅面向可信用户，不要求 Bubblewrap/Landlock/gVisor/Kata 等任务级强沙箱，不宣称不可信任意代码隔离。生产身份/存储、长期 Memory、业务取消/暂停链路、完整公平调度和运维 GC 属于 P2/P3/P4。Seatbelt 只说明 P0 macOS 证据；ReMe 调查结果见 `cloud/reports/reme-investigation.md`。

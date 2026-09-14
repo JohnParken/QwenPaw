@@ -6,6 +6,17 @@ TL proxy。无需为公司直连启动 TypeScript 服务。
 
 ## 配置
 
+### TL 协议调试日志
+
+`qwenpaw app --log-level debug` 会在 QwenPaw 终端及工作目录的 `qwenpaw.log`
+记录 `TL_WIRE` 日志：init/chat 请求正文、HTTP 状态、非流式响应正文和完整 SSE
+事件（包括解析失败的完整事件）。使用 attempt_id、request_id、session_id 关联请求。
+不记录认证头；已配置凭证和常见敏感字段会脱敏。单条 payload 超过 32768 字符会
+截断并标记 truncated，original_chars 为脱敏后截断前的 JSON 字符数。
+这些是 QwenPaw 与 TL 服务之间的交互，不包含代理内部到上游模型的独立请求。
+日志可能包含提示词、模型输出和工具参数，不应直接公开。INFO 级别不输出协议正文。
+HTTP 非成功响应只记录状态；未完成的 SSE 事件不作为完整事件记录。
+
 启动时会读取 `$QWENPAW_WORKING_DIR/tl-provider.json`（默认工作目录为
 `~/.qwenpaw`）。文件不存在时，从包内 `providers/data/tl-provider.json`
 生成默认文件：TL 地址 `http://127.0.0.1:8089`、模型标签 `deepseek-v4-flash`、

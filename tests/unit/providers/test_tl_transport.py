@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 
 import httpx
 import pytest
@@ -27,6 +28,43 @@ class _ChunkStream(httpx.AsyncByteStream):
 
 def _client(handler):
     return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stream", [True, False])
+async def test_debug_wire_logs_request_response_and_sse(caplog, stream):
+    caplog.set_level(logging.DEBUG, logger="qwenpaw.providers.tl_wire")
+
+    async def handler(request):
+        if request.url.path.endswith("init_session"):
+            return httpx.Response(200, json={"code": 0, "data": {"session_id": "s1"}})
+        if not stream:
+            return httpx.Response(200, json={"code": 0, "data": {"txt": "answer-marker"}})
+        raw = ('event: chunk\ndata: {"content":"answer-marker"}\n\n'
+               'event: done\ndata: {"finished":true}\n\n').encode()
+        return httpx.Response(200, stream=_ChunkStream([raw[:20], raw[20:]]))
+
+    async with _client(handler) as client:
+        transport = TLTransport("http://tl", TLConfig(), api_key="hidden-key", client=client)
+        result = [x async for x in transport.iter_text("system-marker", "user-marker", stream=stream)]
+    assert result == ["answer-marker"]
+    records = [json.loads(r.message.split("TL_WIRE ", 1)[1])
+               for r in caplog.records if "TL_WIRE " in r.message]
+    assert sum(r["event"] == "request" for r in records) == 2
+    assert sum(r["event"] == "response_headers" for r in records) == 2
+    assert any(r["event"] == "response_body" for r in records)
+    assert sum(r["event"] == "sse_event" for r in records) == (2 if stream else 0)
+    assert all(r.get("attempt_id") and r.get("request_id") for r in records)
+    assert "system-marker" in caplog.text and "user-marker" in caplog.text
+    assert "answer-marker" in caplog.text and "hidden-key" not in caplog.text
+
+
+def test_debug_sse_callback_observes_invalid_event_before_rejection():
+    seen = []
+    parser = tl_transport_module._SSEParser(1024, lambda name, data: seen.append((name, data)))
+    with pytest.raises(TLError):
+        parser.feed(b'event: chunk\ndata: {broken}\n\n')
+    assert seen == [("chunk", "{broken}")]
 
 
 @pytest.mark.parametrize("event", ["", "done", "end", "message"])

@@ -9,13 +9,14 @@ from contextlib import asynccontextmanager
 import json
 import time
 import uuid
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 from typing import Any
 
 import httpx
 
 from .tl_config import TLConfig
 from .tl_errors import TLError
+from .tl_wire_log import log_wire
 
 _END_EVENTS = {"done", "end"}
 _KNOWN_EVENTS = {"chunk", "done", "end", "error"}
@@ -32,7 +33,11 @@ def _loads_json(raw: str | bytes) -> Any:
 class _SSEParser:
     """Small stateful SSE parser with strict TL event validation."""
 
-    def __init__(self, max_event_bytes: int) -> None:
+    def __init__(
+        self, max_event_bytes: int,
+        on_event: Callable[[str, str], None] | None = None,
+    ) -> None:
+        self._on_event = on_event
         self._max_event_bytes = max_event_bytes
         self._decoder = codecs.getincrementaldecoder("utf-8")(errors="strict")
         self._buffer = ""
@@ -149,6 +154,8 @@ class _SSEParser:
 
         event_name = self._event_name
         data = "\n".join(self._data_lines)
+        if self._on_event is not None:
+            self._on_event(event_name, data)
         if event_name == "error":
             # Only accept the proxy's diagnostic field, never stringify an
             # arbitrary payload (which may include prompts or response bodies).
@@ -277,6 +284,16 @@ class TLTransport:
         self._owns_client = client is None
         self.last_termination: str | None = None
         self.last_attempt_id: str | None = None
+
+    def _log_wire(self, event: str, payload: Any, **context: Any) -> None:
+        log_wire(
+            event=event, payload=payload,
+            secrets=tuple(
+                value for value in (self.api_key, *self.custom_headers.values())
+                if isinstance(value, str) and value
+            ),
+            **context,
+        )
 
     async def __aenter__(self) -> "TLTransport":
         return self
@@ -528,7 +545,14 @@ class TLTransport:
             yield text
             return
 
-        parser = _SSEParser(self.config.max_sse_event_bytes)
+        parser = _SSEParser(
+            self.config.max_sse_event_bytes,
+            on_event=lambda name, data: self._log_wire(
+                "sse_event", {"event": name, "data": data},
+                attempt_id=attempt_id, request_id=request_id,
+                session_id=session_id, direction="tl_to_qwenpaw",
+            ),
+        )
         response_bytes = 0
         response_text_bytes = 0
         async with self._open_response(
@@ -659,6 +683,11 @@ class TLTransport:
                         request_id=request_id,
                         session_id=session_id,
                     )
+        self._log_wire(
+            "response_body", response_body,
+            path=path, attempt_id=attempt_id, request_id=request_id,
+            session_id=session_id, direction="tl_to_qwenpaw",
+        )
         return bytes(response_body)
 
     @asynccontextmanager
@@ -676,6 +705,11 @@ class TLTransport:
         session_id: str | None = None,
     ) -> AsyncIterator[httpx.Response]:
         headers = self._headers(stream)
+        self._log_wire(
+            "request", body, path=path,
+            attempt_id=attempt_id, request_id=request_id,
+            session_id=session_id, direction="qwenpaw_to_tl",
+        )
         response: httpx.Response | None = None
         try:
             request = client.build_request(
@@ -704,6 +738,13 @@ class TLTransport:
                     request_id=request_id,
                     session_id=session_id,
                 ) from exc
+            self._log_wire(
+                "response_headers",
+                {"status": response.status_code,
+                 "content_type": response.headers.get("content-type", "")},
+                path=path, attempt_id=attempt_id, request_id=request_id,
+                session_id=session_id, direction="tl_to_qwenpaw",
+            )
             if not 200 <= response.status_code < 300:
                 raise TLError(
                     phase,
@@ -717,7 +758,13 @@ class TLTransport:
             yield response
         except asyncio.CancelledError:
             raise
-        except TLError:
+        except TLError as exc:
+            self._log_wire(
+                "error", {"stage": exc.stage, "kind": exc.kind,
+                          "message": exc.message},
+                path=path, attempt_id=attempt_id, request_id=request_id,
+                session_id=session_id,
+            )
             raise
         except httpx.TimeoutException as exc:
             raise TLError(
