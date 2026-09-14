@@ -6,6 +6,42 @@ TL proxy。无需为公司直连启动 TypeScript 服务。
 
 ## 配置
 
+启动时会读取 `$QWENPAW_WORKING_DIR/tl-provider.json`（默认工作目录为
+`~/.qwenpaw`）。文件不存在时，从包内 `providers/data/tl-provider.json`
+生成默认文件：TL 地址 `http://127.0.0.1:8089`、模型标签 `deepseek-v4-flash`、
+上下文上限 1,048,576 tokens。代理需要另行启动。
+
+可用 `QWENPAW_PROVIDER_CONFIG=/absolute/path/tl-provider.json` 指定已有文件；
+指定的文件不存在或配置无效时启动报错，不静默切换模型。文件修改后重启生效。
+设 `enabled: false` 可禁用启动默认值。
+
+优先级：agent/请求单独指定的模型 > 已保存的全局模型 > 文件的 `active_model`。
+已保存的同名 provider 配置优先于文件默认值。文件默认值不会自动写成 provider
+快照，因此尚未在 UI 保存配置的 provider 可以继续通过文件修改。
+API key 推荐使用 `api_key_env` 引用环境变量，避免把凭证放入模板；缺少该变量时报错。
+
+文件也支持其他模型后端，例如：
+
+```json
+{
+  "version": 1,
+  "enabled": true,
+  "active_model": {"provider_id": "my-openai", "model": "my-model"},
+  "providers": [{
+    "id": "my-openai",
+    "name": "My OpenAI-compatible service",
+    "chat_model": "OpenAIChatModel",
+    "base_url": "http://127.0.0.1:8000/v1",
+    "api_key_env": "MY_MODEL_API_KEY",
+    "models": [{"id": "my-model", "name": "My model", "max_input_length": 65536}],
+    "generate_kwargs": {"temperature": 0.2, "max_tokens": 2048}
+  }]
+}
+```
+
+`generate_kwargs` 必须符合所选后端支持的参数。TL 不支持此类生成参数覆盖：
+上游模型路由、采样、思考设置仍在代理的 `.env` 中配置。
+
 在「设置 → 模型」新建自定义供应商，选择 **TL (system prompt)**。填写服务根地址，
 可保留公司路径前缀，例如 `https://gateway.example/company`。客户端追加
 `/chatbbc/init_session` 和 `/chatbbc/chat`，不追加 `/v1`。
@@ -58,13 +94,16 @@ Toolkit、Guard 和审批链执行。普通文字模式不会把 JSON/XML 示例
 消息、聊天历史或工具执行。完成、失败、取消、纠错或切换会话时清除。
 不支持预览的客户端和其他渠道沿用校验完成后显示的行为。
 
-完整传输后的非空 JSON 语法错误，以及工具模式下具有完整 DSML calls/invoke
+完整传输后的非空 JSON 语法错误、工具模式下单个 call 的字段包装错误
+（`call_shape`），以及具有完整 DSML calls/invoke
 外层结构的响应，可共用一次格式纠正机会（`json_correction_max_attempts=0` 可关闭）。
 普通 XML、正文引用、代码围栏和截断的 DSML 不进入 DSML 纠正。
 纠正复用原 init 系统协议，失败正文作为不可信数据放入 chat；禁止增补调用、猜测参数
 或修正未知工具名。无法无歧义转换时返回空对象，由校验器拒绝。
 纠正后的整批调用仍须通过原有 JSON、工具名称、参数 schema 和 tool_choice 校验；
 不直接解析或执行 DSML。提示词提高格式遵循率，但不能保证模型转换前后语义一致。
+字段包装纠正仅允许无歧义地调整包装，保留工具名、调用顺序和参数值；不补参数、
+不猜测冲突值、不改参数类型。与 JSON/DSML 共用一次预算，纠正失败不再重试。
 网络错误、SSE 错误、未知工具、参数
 不匹配均直接失败。TL 的 SDK/外层重试和跨模型 fallback 均不重放这些错误；正常
 限流和并发槽保留。取消向上传播。

@@ -126,6 +126,60 @@ async def test_single_syntax_correction_reuses_system():
     assert transport.calls[0][1] != transport.calls[1][1]
 
 
+@pytest.mark.parametrize("wrapper", [
+    {"name": "add", "parameters": {"a": 2, "b": 3}},
+    {"id": "call1", "type": "function", "function": {
+        "name": "add", "arguments": {"a": 2, "b": 3}}},
+    {"name": "add", "arguments": {"a": 2, "b": 3}, "id": "call1"},
+])
+async def test_call_wrapper_corrects_once_with_original_contract(wrapper):
+    broken = json.dumps({"version": 1, "type": "tool_calls", "calls": [wrapper]})
+    transport = FakeTransport(broken, CALL)
+    model = TLChatModel("label", transport, stream=False)
+    result = await model(messages(), TOOLS)
+    assert isinstance(result.content[0], ToolCallBlock)
+    assert len(transport.calls) == 2
+    assert transport.calls[0][0] == transport.calls[1][0]
+    correction = json.loads(transport.calls[1][1])["correction"]
+    assert correction["parse_error"]["type"] == "call_shape"
+    assert correction["failed_assistant_content"] == broken
+
+
+@pytest.mark.parametrize("corrected", [
+    CALL.replace('"add"', '"unknown"'),
+    CALL.replace('"a":2', '"a":"2"'),
+    CALL.replace('"arguments"', '"parameters"'),
+])
+async def test_bad_wrapper_correction_never_emits_or_retries_again(corrected):
+    broken = CALL.replace('"arguments"', '"parameters"')
+    transport = FakeTransport(broken, corrected)
+    model = TLChatModel("label", transport)
+    emitted = []
+    with pytest.raises(TLError):
+        async for result in await model(messages(), TOOLS):
+            emitted.append(result)
+    assert not emitted
+    assert len(transport.calls) == 2
+
+
+async def test_call_shape_respects_disabled_correction():
+    transport = FakeTransport(CALL.replace('"arguments"', '"parameters"'))
+    model = TLChatModel("label", transport,
+                        config=TLConfig(json_correction_max_attempts=0))
+    with pytest.raises(TLError):
+        async for _ in await model(messages(), TOOLS):
+            pass
+    assert len(transport.calls) == 1
+
+
+async def test_syntax_and_wrapper_share_one_correction_budget():
+    transport = FakeTransport('{bad', CALL.replace('"arguments"', '"parameters"'))
+    model = TLChatModel("label", transport, stream=False)
+    with pytest.raises(TLError):
+        await model(messages(), TOOLS)
+    assert len(transport.calls) == 2
+
+
 async def test_dsml_is_retried_once_and_failed_body_is_untrusted_json():
     transport = FakeTransport(DSML_CALL, CALL)
     model = TLChatModel("label", transport, stream=False)

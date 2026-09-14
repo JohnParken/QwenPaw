@@ -16,7 +16,7 @@ from agentscope.model import ChatModelBase
 from qwenpaw.exceptions import ModelNotFoundException
 
 from ..config.config import ModelSlotConfig
-from ..constant import EnvVarLoader, SECRET_DIR
+from ..constant import EnvVarLoader, SECRET_DIR, WORKING_DIR
 from ..exceptions import ProviderError
 from ..utils.logging import sanitize_log_value
 from ..utils.io_utils import (
@@ -112,6 +112,7 @@ class ProviderManager(
         except Exception as e:
             logger.warning("Failed to migrate legacy providers: %s", e)
         self._init_from_storage()
+        self._init_default_provider_config()
         self._capability_registry = ExpectedCapabilityRegistry()
         self._apply_default_annotations()
 
@@ -128,6 +129,70 @@ class ProviderManager(
                 os.chmod(path, 0o700)  # Restrict permissions for security
             except Exception:
                 pass
+
+    def _init_default_provider_config(self):
+        """Load editable startup defaults beneath persisted user choices."""
+        from .default_provider_config import load_default_provider_config
+
+        configured_path = os.environ.get("QWENPAW_PROVIDER_CONFIG")
+        path = (
+            Path(configured_path).expanduser()
+            if configured_path
+            else WORKING_DIR / "tl-provider.json"
+        )
+        try:
+            config = load_default_provider_config(
+                path, create=not bool(configured_path)
+            )
+            if not config["enabled"]:
+                return
+            candidates = {}
+            for raw in config["providers"]:
+                if raw.get("chat_model", "OpenAIChatModel") not in {
+                    "TLChatModel", "OpenAIChatModel", "OpenAIResponseModel",
+                    "AnthropicChatModel", "GeminiChatModel", "DashScopeChatModel",
+                }:
+                    raise ValueError("unsupported chat_model")
+                provider = self._provider_from_data(raw)
+                if set(raw) - set(type(provider).model_fields):
+                    raise ValueError("unknown provider settings")
+                for model in raw.get("models", []):
+                    if set(model) - set(ModelInfo.model_fields):
+                        raise ValueError("unknown model settings")
+                key = self._normalize_provider_id(provider.id)
+                if key in candidates:
+                    raise ValueError("duplicate provider identity")
+                candidates[key] = provider
+            slot = ModelSlotConfig.model_validate(config["active_model"])
+            key = self._normalize_provider_id(slot.provider_id)
+            selected = candidates.get(key) or self.get_provider(key)
+            if selected is None or not selected.has_model(slot.model):
+                raise ValueError("default model is not configured")
+        except Exception:
+            # Pydantic errors can embed input values, including credentials.
+            # Never include the exception text or config body in diagnostics.
+            raise ProviderError(
+                message=(
+                    "Invalid default provider configuration. Check "
+                    "tl-provider.json or QWENPAW_PROVIDER_CONFIG."
+                ),
+            ) from None
+
+        for key, provider in candidates.items():
+            if key in self.custom_providers or key in self.plugin_providers:
+                continue
+            if key in self.builtin_providers:
+                if self._provider_path_for_kind("builtin", key).exists():
+                    continue
+                self.builtin_providers[key] = provider
+            else:
+                provider.is_custom = True
+                self.custom_providers[key] = provider
+        if self.active_model is None:
+            selected = self.get_provider(slot.provider_id)
+            # An existing provider snapshot may intentionally remove a model.
+            if selected is not None and selected.has_model(slot.model):
+                self.active_model = slot
 
     def _init_builtins(self):
         """Register the ordered built-in provider catalog."""
