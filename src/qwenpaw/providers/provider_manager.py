@@ -2,6 +2,7 @@
 """A Manager class to handle all providers, including built-in and custom ones.
 It provides a unified interface to manage providers, such as listing available
 providers, adding/removing custom providers, and fetching provider details."""
+
 # pylint: disable=unused-import
 
 import asyncio
@@ -483,7 +484,9 @@ class ProviderManager(
         )  # Validate provider data
         # For custom providers, we assume they don't support connection check
         # without model config, to avoid false negatives in the UI.
-        provider.support_connection_check = False
+        provider.support_connection_check = (
+            provider.chat_model == "TLChatModel"
+        )
         await self.save_provider_config_async(provider.id, provider)
         provider_key = self._normalize_provider_id(provider.id)
         self.custom_providers[provider_key] = provider

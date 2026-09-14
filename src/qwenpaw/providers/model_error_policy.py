@@ -64,6 +64,19 @@ class ModelErrorDecision:
 
 def classify_model_error(exc: Exception) -> ModelErrorDecision:
     """Classify whether a model error may retry or cross-model fallback."""
+    from .tl_errors import TLError
+
+    if isinstance(exc, TLError):
+        return ModelErrorDecision(
+            kind=(
+                "context_overflow"
+                if exc.kind == "context_overflow"
+                else "bad_request"
+            ),
+            status_code=getattr(exc, "status_code", None),
+            retryable=False,
+            fallback_eligible=False,
+        )
     status = extract_status_code(exc)
     message = str(exc).lower()
     if status in {401, 403}:

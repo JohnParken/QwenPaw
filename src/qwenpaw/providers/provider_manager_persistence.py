@@ -842,7 +842,11 @@ class ProviderManagerPersistenceMixin(
         provider_id = str(data.get("id", ""))
         chat_model = str(data.get("chat_model", ""))
 
-        if provider_id == "openrouter":
+        if chat_model == "TLChatModel":
+            from .tl_provider import TLProvider
+
+            provider_type = TLProvider
+        elif provider_id == "openrouter":
             provider_type = OpenRouterProvider
         elif provider_id == "anthropic" or chat_model == "AnthropicChatModel":
             provider_type = AnthropicProvider

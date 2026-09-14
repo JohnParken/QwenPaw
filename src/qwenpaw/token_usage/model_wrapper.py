@@ -11,6 +11,7 @@ from agentscope.model._model_usage import ChatUsage
 from ..utils.model_response import safe_attr
 from .buffer import _UsageEvent
 from .manager import _usage_agent_id, get_token_usage_manager
+from ..providers.tl_utils import is_tl_model
 
 # AgentScope does not expose provider cache semantics through a public
 # capability API. These prefixes therefore depend on its concrete adapter MRO
@@ -104,6 +105,12 @@ class TokenRecordingModelWrapper(ChatModelBase):
         """Keep formatter updates synchronized with the wrapped model."""
         self._model.formatter = value
 
+    async def count_tokens(self, messages, tools=None):
+        """Count the compiled TL prompt through transparent wrappers."""
+        if is_tl_model(self._model):
+            return await self._model.count_tokens(messages, tools)
+        return await super().count_tokens(messages, tools)
+
     def _record_usage(self, usage: ChatUsage | None) -> None:
         """Enqueue a usage event synchronously — never blocks the caller."""
         if usage is None:
@@ -188,9 +195,9 @@ class TokenRecordingModelWrapper(ChatModelBase):
                 session_id,
             )
             if previous is None:
-                TokenRecordingModelWrapper._usage_by_session[
-                    session_id
-                ] = usage
+                TokenRecordingModelWrapper._usage_by_session[session_id] = (
+                    usage
+                )
                 return
             for key in (
                 "prompt_tokens",
