@@ -1,0 +1,31 @@
+{
+  "name": "qwenpaw-native-console-validation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Independent vanilla TypeScript console validation; no browser runtime dependencies",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config vitest.config.ts",
+    "test:e2e": "playwright test",
+    "check:deps": "node scripts/check-deps.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run check:deps && npm run build && npm test && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "@types/node": "^24.7.1",
+    "jsdom": "19.0.0",
+    "prettier": "^3.1.1",
+    "typescript": "^5.7.3",
+    "vite": "5.1.8",
+    "vitest": "0.32.0"
+  }
+}
