@@ -22,7 +22,6 @@ RUN apt-get update \
 WORKDIR /app
 COPY pyproject.toml setup.py README.md ./
 COPY src ./src
-COPY packages/qwenpawmail-mcp/src/qwenpawmail_mcp ./packages/qwenpawmail-mcp/src/qwenpawmail_mcp
 RUN python -m pip install --no-cache-dir ".[cloud,office]"
 COPY --from=node-deps /opt/qwenpaw-office-node /opt/qwenpaw-office-node
 

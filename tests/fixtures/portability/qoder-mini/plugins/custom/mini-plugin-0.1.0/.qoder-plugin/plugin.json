@@ -1,7 +1,0 @@
-{
-  "name": "mini-plugin",
-  "displayName": "Mini Plugin",
-  "version": "0.1.0",
-  "description": "Portable Qoder fixture",
-  "skills": "./skills/"
-}
