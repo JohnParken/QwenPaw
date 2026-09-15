@@ -3,12 +3,15 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime, timezone
+import asyncio
+import json
 from typing import Literal
 from uuid import uuid4
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
-from pydantic import Field
+from fastapi.responses import StreamingResponse
+from pydantic import Field, model_validator
 
 from . import PROTOCOL_VERSION
 from .auth import Auth
@@ -19,6 +22,7 @@ from .contracts import (
     Limits,
     RuntimeIdentity,
     Scope,
+    Verification,
     Wire,
     digest,
 )
@@ -43,16 +47,30 @@ class CreateRun(Wire):
     request_id: str = Field(pattern=ID)
     scope: Scope
     session_id: str = Field(pattern=ID)
-    input_ref: FileRef
+    input_ref: FileRef | None = None
     runtime_identity: RuntimeIdentity
     expected_revision: int | None = Field(default=None, ge=0)
     base_policy: Literal["latest_at_claim"] = "latest_at_claim"
+    message: str | None = Field(default=None, min_length=1, max_length=32768)
+    attachments: list[FileRef] = Field(default_factory=list, max_length=16)
+
+    @model_validator(mode="after")
+    def has_user_input(self):
+        if self.input_ref is None and self.message is None:
+            raise ValueError("message or input_ref is required")
+        return self
+
+
+class CreateSession(Wire):
+    request_id: str = Field(pattern=ID)
+    session_id: str | None = Field(default=None, pattern=ID)
+    title: str = Field(default="New conversation", min_length=1, max_length=200)
 
 
 class Register(Wire):
     worker_id: str = Field(pattern=ID)
     runtime_identity: RuntimeIdentity
-    executor: Literal["fixture", "native"]
+    executor: Literal["fixture", "native", "office-agent"]
     slots: Literal[1] = 1
 
 
@@ -63,6 +81,25 @@ class Claim(Wire):
 class AttemptAction(Wire):
     attempt_id: str = Field(pattern=ID)
     lease_epoch: int = Field(ge=1)
+
+
+class Snapshot(AttemptAction):
+    sequence: int = Field(ge=1)
+    text: str = Field(max_length=65536)
+
+
+class PublishArtifact(AttemptAction):
+    request_id: str = Field(pattern=ID)
+    artifact_id: str = Field(pattern=ID)
+    output_path: str = Field(min_length=8, max_length=512)
+    file_ref: FileRef
+    verification: Verification
+
+
+class FinalCommit(AttemptAction):
+    request_id: str = Field(pattern=ID)
+    conversation_ref: FileRef
+    final_text: str = Field(max_length=65536)
 
 
 class Checkpoint(AttemptAction):
@@ -141,6 +178,8 @@ def assignment(db, a, auth):
         "cleanup": a["cleanup"],
         "lease_until": stamp(a["lease_until"]),
         "input_ref": r["input_ref"],
+        "attachments": deepcopy(r.get("attachments", [])),
+        "message": r.get("message"),
         "checkpoint": deepcopy(a["restore"]),
         "file_token": auth.issue(
             "file-worker", a["worker_id"], "files", scope=scope, ttl=300
@@ -240,7 +279,10 @@ def create_app(
         pin(
             "input-" + key,
             body.scope.model_dump(),
-            [body.input_ref.model_dump()],
+            [
+                *([body.input_ref.model_dump()] if body.input_ref else []),
+                *[x.model_dump() for x in body.attachments],
+            ],
         )
         with repository.transaction() as (db, now):
             prior = db["requests"].get("create-" + key)
@@ -248,11 +290,11 @@ def create_app(
                 if prior["hash"] != h:
                     fail("IDEMPOTENCY_CONFLICT")
                 return deepcopy(db["runs"][prior["run_id"]])
-            if (
-                sum(r["state"] not in TERMINAL for r in db["runs"].values())
-                >= 32
-            ):
-                fail("STATIC_ADMISSION_FULL", 429)
+            queued = [r for r in db["runs"].values() if r["state"] == "QUEUED"]
+            if sum(r["owner_user_id"] == body.scope.owner_user_id for r in queued) >= 10:
+                fail("USER_QUEUE_FULL", 429)
+            if sum(r["tenant_id"] == body.scope.tenant_id for r in queued) >= 200:
+                fail("TENANT_QUEUE_FULL", 429)
             scope_key = body.scope.key
             db["scopes"].setdefault(
                 scope_key,
@@ -278,11 +320,117 @@ def create_app(
                 "checkpoint": None,
                 "deadline": now + 300,
                 "input_set_id": "input-" + key,
+                "created_at": stamp(now),
+                "message_id": None,
             }
+            session = db["sessions"].setdefault(
+                body.session_id,
+                {
+                    "session_id": body.session_id,
+                    "tenant_id": body.scope.tenant_id,
+                    "owner_user_id": body.scope.owner_user_id,
+                    "title": "New conversation",
+                    "state": "ACTIVE",
+                    "created_at": stamp(now),
+                },
+            )
+            if session["state"] != "ACTIVE":
+                fail("SESSION_DELETED")
+            if body.message is not None:
+                message_id = uuid4().hex
+                db["messages"][message_id] = {
+                    "message_id": message_id,
+                    "session_id": body.session_id,
+                    "run_id": run_id,
+                    "role": "user",
+                    "content": body.message,
+                    "attachments": [x.model_dump() for x in body.attachments],
+                    "created_at": stamp(now),
+                }
+                r["message_id"] = message_id
             db["runs"][run_id] = r
             db["requests"]["create-" + key] = {"hash": h, "run_id": run_id}
             event(db, r, "RUN_ACCEPTED", now)
             return deepcopy(r)
+
+    @app.post("/v1/sessions", status_code=201)
+    def create_session(body: CreateSession, request: Request):
+        claims = identity(request, "bff")
+        session_id = body.session_id or uuid4().hex
+        key = "session-" + digest([claims["sub"], body.request_id])
+        value_hash = digest(body.model_dump())
+        with repository.transaction() as (db, now):
+            prior = db["requests"].get(key)
+            if prior:
+                if prior["hash"] != value_hash:
+                    fail("IDEMPOTENCY_CONFLICT")
+                return deepcopy(db["sessions"][prior["session_id"]])
+            if session_id in db["sessions"]:
+                fail("SESSION_EXISTS")
+            session = {
+                "session_id": session_id,
+                "tenant_id": claims["tenant_id"],
+                "owner_user_id": claims["user_id"],
+                "title": body.title,
+                "state": "ACTIVE",
+                "created_at": stamp(now),
+            }
+            db["sessions"][session_id] = session
+            db["requests"][key] = {
+                "hash": value_hash,
+                "session_id": session_id,
+            }
+            return deepcopy(session)
+
+    def owned_session(db, claims, session_id):
+        value = db["sessions"].get(session_id)
+        if not value:
+            fail("SESSION_NOT_FOUND", 404)
+        if (value["tenant_id"], value["owner_user_id"]) != (
+            claims.get("tenant_id"), claims.get("user_id")
+        ):
+            fail("SCOPE_FORBIDDEN", 403)
+        return value
+
+    @app.get("/v1/sessions")
+    def list_sessions(request: Request):
+        claims = identity(request, "bff")
+        with repository.transaction() as (db, now):
+            values = [
+                deepcopy(s)
+                for s in db["sessions"].values()
+                if s["tenant_id"] == claims["tenant_id"]
+                and s["owner_user_id"] == claims["user_id"]
+                and s["state"] == "ACTIVE"
+            ]
+            return {"items": sorted(values, key=lambda s: s["created_at"], reverse=True)}
+
+    @app.get("/v1/sessions/{session_id}")
+    def get_session(session_id: str, request: Request):
+        claims = identity(request, "bff")
+        with repository.transaction() as (db, now):
+            session = deepcopy(owned_session(db, claims, session_id))
+            session["messages"] = [
+                deepcopy(m) for m in db["messages"].values()
+                if m["session_id"] == session_id
+            ]
+            return session
+
+    @app.delete("/v1/sessions/{session_id}", status_code=204)
+    def delete_session(session_id: str, request: Request):
+        claims = identity(request, "bff")
+        with repository.transaction() as (db, now):
+            session = owned_session(db, claims, session_id)
+            if any(r["session_id"] == session_id and r["state"] not in TERMINAL for r in db["runs"].values()):
+                fail("SESSION_BUSY")
+            session["state"] = "DELETED"
+
+    @app.get("/v1/sessions/{session_id}/messages")
+    def list_messages(session_id: str, request: Request):
+        claims = identity(request, "bff")
+        with repository.transaction() as (db, now):
+            owned_session(db, claims, session_id)
+            return {"items": [deepcopy(m) for m in db["messages"].values() if m["session_id"] == session_id]}
 
     @app.get("/v1/runs/{run_id}")
     def query_run(run_id: str, request: Request):
@@ -306,6 +454,72 @@ def create_app(
                     if e["run_id"] == run_id
                 ],
             }
+
+    @app.post("/v1/runs/{run_id}/cancel")
+    def cancel_run(run_id: str, request: Request):
+        claims = identity(request, "bff")
+        with repository.transaction() as (db, now):
+            r = db["runs"].get(run_id)
+            if not r:
+                fail("RUN_NOT_FOUND", 404)
+            s = db["scopes"][r["scope_key"]]
+            if (claims.get("tenant_id"), claims.get("user_id")) != (s["tenant_id"], s["owner_user_id"]):
+                fail("SCOPE_FORBIDDEN", 403)
+            if r["state"] not in TERMINAL:
+                r["state"] = "CANCELLED"
+                s["active_run_id"] = None
+                event(db, r, "RUN_CANCELLED", now)
+            return {"state": r["state"]}
+
+    @app.get("/v1/runs/{run_id}/snapshot")
+    def get_snapshot(run_id: str, request: Request):
+        claims = identity(request, "bff")
+        with repository.transaction() as (db, now):
+            r = db["runs"].get(run_id)
+            if not r:
+                fail("RUN_NOT_FOUND", 404)
+            if (claims.get("tenant_id"), claims.get("user_id")) != (r["tenant_id"], r["owner_user_id"]):
+                fail("SCOPE_FORBIDDEN", 403)
+            return deepcopy(db["snapshots"].get(run_id, {"run_id": run_id, "sequence": 0, "text": ""}))
+
+    @app.get("/v1/runs/{run_id}/events")
+    async def stream_events(run_id: str, request: Request):
+        claims = identity(request, "bff")
+        with repository.transaction() as (db, now):
+            r = db["runs"].get(run_id)
+            if not r:
+                fail("RUN_NOT_FOUND", 404)
+            if (claims.get("tenant_id"), claims.get("user_id")) != (
+                r["tenant_id"], r["owner_user_id"]
+            ):
+                fail("SCOPE_FORBIDDEN", 403)
+
+        async def generate():
+            last_event = 0
+            last_snapshot = 0
+            while not await request.is_disconnected():
+                with repository.transaction() as (db, now):
+                    run = deepcopy(db["runs"][run_id])
+                    events = sorted(
+                        (
+                            deepcopy(e) for e in db["events"].values()
+                            if e["run_id"] == run_id
+                            and e["event_seq"] > last_event
+                        ),
+                        key=lambda e: e["event_seq"],
+                    )
+                    snapshot = deepcopy(db["snapshots"].get(run_id))
+                for item in events:
+                    last_event = item["event_seq"]
+                    yield "event: status\ndata: " + json.dumps(item) + "\n\n"
+                if snapshot and snapshot["sequence"] > last_snapshot:
+                    last_snapshot = snapshot["sequence"]
+                    yield "event: snapshot\ndata: " + json.dumps(snapshot) + "\n\n"
+                if run["state"] in TERMINAL:
+                    break
+                await asyncio.sleep(0.5)
+
+        return StreamingResponse(generate(), media_type="text/event-stream")
 
     @app.post("/v1/workers/register")
     def register(body: Register, request: Request):
@@ -342,13 +556,18 @@ def create_app(
             ):
                 fail("SLOT_UNAVAILABLE")
             selected = None
-            for r in db["runs"].values():
+            running = [r for r in db["runs"].values() if r["state"] in ACTIVE]
+            for r in sorted(db["runs"].values(), key=lambda item: item.get("created_at", "")):
                 s = db["scopes"][r["scope_key"]]
                 if (
                     r["state"] != "QUEUED"
                     or r["deadline"] <= now
                     or r["runtime_identity"] != w["runtime_identity"]
                 ):
+                    continue
+                if sum(x["owner_user_id"] == r["owner_user_id"] for x in running) >= 2:
+                    continue
+                if sum(x["tenant_id"] == r["tenant_id"] for x in running) >= 20:
                     continue
                 if s["lifecycle"] != "ACTIVE" or s["active_run_id"] not in (
                     None,
@@ -448,6 +667,136 @@ def create_app(
             }
         fault("heartbeat_committed")
         return result
+
+    @app.post("/v1/snapshot")
+    def snapshot(body: Snapshot, request: Request):
+        claims = identity(request, "worker")
+        with repository.transaction() as (db, now):
+            a, r, s = current(db, claims, body, now)
+            previous = db["snapshots"].get(r["run_id"])
+            if previous and body.sequence <= previous["sequence"]:
+                fail("SNAPSHOT_SEQUENCE_CONFLICT")
+            value = {
+                **body.model_dump(),
+                "run_id": r["run_id"],
+                "updated_at": stamp(now),
+            }
+            db["snapshots"][r["run_id"]] = value
+            event(db, r, "LIVE_SNAPSHOT", now, sequence=body.sequence)
+            return {"sequence": body.sequence}
+
+    @app.post("/v1/artifacts")
+    def publish_artifact(body: PublishArtifact, request: Request):
+        claims = identity(request, "worker")
+        from pathlib import PurePosixPath
+
+        logical = PurePosixPath(body.output_path)
+        if (
+            logical.is_absolute()
+            or not logical.parts
+            or logical.parts[0] != "output"
+            or ".." in logical.parts
+            or "\\" in body.output_path
+        ):
+            fail("ARTIFACT_OUTSIDE_OUTPUT", 422)
+        key = "artifact-" + body.request_id
+        body_hash = digest(
+            body.model_dump(exclude={"attempt_id", "lease_epoch"})
+        )
+        with repository.transaction() as (db, now):
+            prior = db["requests"].get(key)
+            if prior:
+                if prior["hash"] != body_hash:
+                    fail("IDEMPOTENCY_CONFLICT")
+                return deepcopy(db["artifacts"][prior["artifact_id"]])
+            a, r, s = current(db, claims, body, now)
+            if body.artifact_id in db["artifacts"]:
+                fail("ARTIFACT_EXISTS")
+            scope = {k: s[k] for k in Scope.model_fields}
+        pin(
+            "artifact-" + body.artifact_id,
+            scope,
+            [body.file_ref.model_dump()],
+        )
+        with repository.transaction() as (db, now):
+            a, r, s = current(db, claims, body, now)
+            prior = db["requests"].get(key)
+            if prior:
+                if prior["hash"] != body_hash:
+                    fail("IDEMPOTENCY_CONFLICT")
+                return deepcopy(db["artifacts"][prior["artifact_id"]])
+            artifact = {
+                **body.model_dump(),
+                "run_id": r["run_id"],
+                "session_id": r["session_id"],
+                "created_at": stamp(now),
+            }
+            db["artifacts"][body.artifact_id] = artifact
+            db["requests"][key] = {
+                "hash": body_hash,
+                "artifact_id": body.artifact_id,
+            }
+            event(db, r, "ARTIFACT_PUBLISHED", now, artifact_id=body.artifact_id)
+            return deepcopy(artifact)
+
+    @app.post("/v1/final-commits")
+    def final_commit(body: FinalCommit, request: Request):
+        claims = identity(request, "worker")
+        key = "final-" + body.request_id
+        body_hash = digest(
+            body.model_dump(exclude={"attempt_id", "lease_epoch"})
+        )
+        with repository.transaction() as (db, now):
+            prior = db["requests"].get(key)
+            if prior:
+                if prior["hash"] != body_hash:
+                    fail("IDEMPOTENCY_CONFLICT")
+                return deepcopy(prior["result"])
+            a, r, s = current(db, claims, body, now)
+            scope = {k: s[k] for k in Scope.model_fields}
+        pin(
+            "final-" + body.request_id,
+            scope,
+            [body.conversation_ref.model_dump()],
+        )
+        with repository.transaction() as (db, now):
+            prior = db["requests"].get(key)
+            if prior:
+                if prior["hash"] != body_hash:
+                    fail("IDEMPOTENCY_CONFLICT")
+                return deepcopy(prior["result"])
+            a, r, s = current(db, claims, body, now)
+            head = deepcopy(s.get("head") or {"conversations": {}, "files": {}})
+            head["conversations"][r["session_id"]] = body.conversation_ref.model_dump()
+            head.update(
+                revision=s["revision"] + 1,
+                runtime_identity=r["runtime_identity"],
+                scope={k: s[k] for k in Scope.model_fields},
+            )
+            s["revision"] += 1
+            s["head"] = r["checkpoint"] = head
+            r["final_committed"] = True
+            message_id = uuid4().hex
+            db["messages"][message_id] = {
+                "message_id": message_id,
+                "session_id": r["session_id"],
+                "run_id": r["run_id"],
+                "role": "assistant",
+                "content": body.final_text,
+                "attachments": [],
+                "created_at": stamp(now),
+            }
+            result = {
+                "state": "COMMITTED",
+                "revision": s["revision"],
+                "message_id": message_id,
+            }
+            db["requests"][key] = {
+                "hash": body_hash,
+                "result": result,
+            }
+            event(db, r, "FINAL_COMMITTED", now, message_id=message_id)
+            return deepcopy(result)
 
     @app.post("/v1/checkpoints")
     def checkpoint(body: Checkpoint, request: Request):
@@ -605,7 +954,11 @@ def create_app(
             r["state"] = {
                 "handoff": "RECOVERING",
                 "finish": "SUCCEEDED",
-                "failed": "FAILED",
+                "failed": (
+                    "RECOVERING"
+                    if r["lease_epoch"] < 2 and not r.get("final_committed")
+                    else "FAILED"
+                ),
             }[body.action]
             if r["state"] in TERMINAL:
                 s["active_run_id"] = None
@@ -654,11 +1007,13 @@ def create_app(
                 # Old tasks only touch private files.
                 # All authoritative writes stay fenced until
                 # a new worker starts.
-                if r["deadline"] > now:
+                if r["deadline"] > now and r["lease_epoch"] < 2:
                     r["state"] = "QUEUED"
                     recovered.append(r["run_id"])
                 else:
-                    r["state"] = "TIMED_OUT"
+                    r["state"] = (
+                        "TIMED_OUT" if r["deadline"] <= now else "FAILED"
+                    )
                     db["scopes"][r["scope_key"]]["active_run_id"] = None
             return {"recovered": recovered}
 

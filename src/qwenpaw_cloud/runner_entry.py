@@ -51,7 +51,12 @@ async def _run_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     executor = payload.get("executor")
     if not isinstance(root, str) or not isinstance(executor, str):
         raise RunnerError("root and executor are required")
-    runner = Runner(context, root, executor=executor)
+    runner = Runner(
+        context,
+        root,
+        executor=executor,
+        model_config=payload.get("model_config"),
+    )
     try:
         await runner.initialize()
         restore = payload.get("restore")

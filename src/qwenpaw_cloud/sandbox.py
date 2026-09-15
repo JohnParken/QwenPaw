@@ -14,6 +14,7 @@ import platform
 import signal
 import sys
 import time
+from typing import Iterable
 
 from .contracts import ExecutionContext, Limits
 
@@ -49,17 +50,39 @@ class PathMap:
         root.mkdir(
             mode=0o700
         )  # new Attempt, never reuse an existing directory
-        for name in ("home", "tmp", "state", "workspace", "secrets"):
+        for name in (
+            "home",
+            "input",
+            "tmp",
+            "state",
+            "workspace",
+            "output",
+            "secrets",
+        ):
             (root / name).mkdir(mode=0o700)
         return cls(root)
 
+    def seal_inputs(self):
+        for path in (self.root / "input").rglob("*"):
+            path.chmod(0o400 if path.is_file() else 0o500)
+        (self.root / "input").chmod(0o500)
+
     def environment(self):
+        node_path = Path(
+            os.environ.get(
+                "QWENPAW_OFFICE_NODE_PATH",
+                "/opt/qwenpaw-office-node/node_modules",
+            )
+        )
+        if not node_path.is_absolute():
+            raise ValueError("QWENPAW_OFFICE_NODE_PATH must be absolute")
         return {
             "HOME": str(self.root / "home"),
             "TMPDIR": str(self.root / "tmp"),
             "QWENPAW_WORKING_DIR": str(self.root / "state"),
-            "QWENPAW_SECRET_DIR": str(self.root / "secrets"),
-            "PATH": "/usr/bin:/bin",
+            "PATH": "/usr/local/bin:/usr/bin:/bin",
+            # Fixed image-owned Node dependency root; never inherit caller paths.
+            "NODE_PATH": str(node_path.resolve(strict=False)),
             "LANG": "en_US.UTF-8",
             "PYTHONPATH": str(Path(__file__).resolve().parents[1]),
             "PYTHONDONTWRITEBYTECODE": "1",
@@ -68,6 +91,114 @@ class PathMap:
             "HF_HUB_OFFLINE": "1",
             "TRANSFORMERS_OFFLINE": "1",
         }
+
+
+class ShellPolicyError(ValueError):
+    """A command does not satisfy the immutable Skill/Attempt policy."""
+
+
+@dataclass(frozen=True)
+class ShellCommand:
+    argv: tuple[str, ...]
+    cwd: Path
+    skill_id: str
+
+
+class ShellPolicy:
+    """Validate argv/cwd without invoking a shell or consulting PATH aliases."""
+
+    def __init__(
+        self,
+        paths: PathMap,
+        skill_root: Path,
+        allowed_commands: Iterable[str],
+    ):
+        self.paths = paths
+        self.skill_root = skill_root.resolve(strict=True)
+        self.allowed = frozenset(allowed_commands)
+
+    def validate(
+        self, argv: Iterable[str], cwd: Path, skill_id: str
+    ) -> ShellCommand:
+        values = tuple(argv)
+        if not values or not all(isinstance(v, str) and v for v in values):
+            raise ShellPolicyError("INVALID_ARGV")
+        if values[0] not in self.allowed:
+            raise ShellPolicyError("COMMAND_NOT_ALLOWED")
+        if any("\x00" in value for value in values):
+            raise ShellPolicyError("INVALID_ARGV")
+        resolved = cwd.resolve(strict=True)
+        attempt = self.paths.root.resolve(strict=True)
+        if not (
+            resolved.is_relative_to(attempt)
+            or resolved.is_relative_to(self.skill_root)
+        ):
+            raise ShellPolicyError("CWD_OUTSIDE_ATTEMPT")
+        return ShellCommand(values, resolved, skill_id)
+
+    def artifact_path(self, value: Path) -> Path:
+        output = (self.paths.root / "output").resolve(strict=True)
+        resolved = value.resolve(strict=True)
+        if value.is_symlink() or not resolved.is_relative_to(output):
+            raise ShellPolicyError("ARTIFACT_OUTSIDE_OUTPUT")
+        if not resolved.is_file():
+            raise ShellPolicyError("ARTIFACT_NOT_REGULAR_FILE")
+        return resolved
+
+
+class TrustedContainerPolicy:
+    """Fail-closed command policy for trusted, non-root container workers.
+
+    This is not a sandbox.  It only permits a declared interpreter to run a
+    packaged script from the selected immutable Skill.
+    """
+
+    _FORBIDDEN = frozenset(
+        {"bash", "sh", "zsh", "fish", "pip", "pip3", "npm", "npx",
+         "curl", "wget", "ssh", "scp", "nc", "netcat", "socat"}
+    )
+    _INLINE_FLAGS = frozenset({"-c", "-m", "-e", "--eval", "--require"})
+
+    def __init__(self, paths: PathMap):
+        self.paths = paths
+
+    def validate(self, argv: Iterable[str], skill) -> ShellCommand:
+        values = tuple(argv)
+        if len(values) < 2 or not all(
+            isinstance(value, str) and value and "\x00" not in value
+            for value in values
+        ):
+            raise ShellPolicyError("FIXED_SKILL_SCRIPT_REQUIRED")
+        command = Path(values[0]).name
+        if command != values[0]:
+            raise ShellPolicyError("COMMAND_PATH_NOT_ALLOWED")
+        if command in self._FORBIDDEN or command not in skill.manifest.allowed_commands:
+            raise ShellPolicyError("COMMAND_NOT_ALLOWED")
+        if command not in {"python", "python3", "node"}:
+            raise ShellPolicyError("INTERPRETER_NOT_ALLOWED")
+        if any(value in self._INLINE_FLAGS for value in values[1:]):
+            raise ShellPolicyError("INLINE_CODE_NOT_ALLOWED")
+        skill_root = skill.directory.resolve(strict=True)
+        script = Path(values[1])
+        script = script if script.is_absolute() else skill_root / script
+        try:
+            script = script.resolve(strict=True)
+        except OSError as exc:
+            raise ShellPolicyError("SCRIPT_NOT_DECLARED") from exc
+        scripts_root = (skill_root / "scripts").resolve(strict=True)
+        if not script.is_file() or not script.is_relative_to(scripts_root):
+            raise ShellPolicyError("SCRIPT_NOT_DECLARED")
+        attempt = self.paths.root.resolve(strict=True)
+        for value in values[2:]:
+            candidate_value = value.split("=", 1)[1] if "=" in value else value
+            candidate = Path(candidate_value)
+            if ".." in candidate.parts:
+                raise ShellPolicyError("ARGUMENT_PATH_OUTSIDE_ATTEMPT")
+            if candidate.is_absolute():
+                resolved = candidate.resolve(strict=False)
+                if not resolved.is_relative_to(attempt):
+                    raise ShellPolicyError("ARGUMENT_PATH_OUTSIDE_ATTEMPT")
+        return ShellCommand(values, skill_root, skill.manifest.id)
 
 
 def _quote(path):
@@ -92,6 +223,14 @@ def seatbelt_profile(paths: PathMap):
         Path(sys.prefix).resolve(),
         Path(__file__).resolve().parents[1],
     ]
+    node_path = Path(
+        os.environ.get(
+            "QWENPAW_OFFICE_NODE_PATH",
+            "/opt/qwenpaw-office-node/node_modules",
+        )
+    )
+    if node_path.is_absolute() and node_path.exists():
+        public.append(node_path.resolve())
     rules = [
         "(version 1)",
         "(deny default)",

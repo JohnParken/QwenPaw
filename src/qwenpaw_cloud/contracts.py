@@ -43,7 +43,28 @@ class FileRef(Wire):
     file_id: str = Field(pattern=ID)
     version: Literal[1] = 1
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    size: int = Field(ge=0, le=1048576)
+    size: int = Field(ge=0, le=104857600)
+    mime_type: str | None = Field(default=None, max_length=255)
+    name: str | None = Field(default=None, max_length=255)
+
+
+class Verification(Wire):
+    level: Literal["structural_verified", "content_checked", "unverified"]
+    checks: tuple[str, ...] = ()
+    limitations: tuple[str, ...] = ()
+
+
+class Artifact(Wire):
+    artifact_id: str = Field(pattern=ID)
+    file_ref: FileRef
+    verification: Verification
+
+
+class LiveSnapshot(Wire):
+    attempt_id: str = Field(pattern=ID)
+    lease_epoch: int = Field(ge=1)
+    sequence: int = Field(ge=1)
+    text: str = Field(max_length=65536)
 
 
 class RuntimeIdentity(Wire):

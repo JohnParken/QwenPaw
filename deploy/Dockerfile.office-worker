@@ -1,0 +1,34 @@
+FROM node:22-bookworm-slim AS node-deps
+WORKDIR /opt/qwenpaw-office-node
+COPY deploy/office-node/package.json deploy/office-node/package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+
+FROM python:3.12-slim-bookworm
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    NODE_PATH=/opt/qwenpaw-office-node/node_modules \
+    QWENPAW_OFFICE_NODE_PATH=/opt/qwenpaw-office-node/node_modules \
+    QWENPAW_ATTEMPT_ROOT=/attempts
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 qwenpaw \
+    && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent qwenpaw \
+    && mkdir -p /attempts /tmp/qwenpaw \
+    && chown -R 10001:10001 /attempts /tmp/qwenpaw
+
+WORKDIR /app
+COPY pyproject.toml setup.py README.md ./
+COPY src ./src
+COPY packages/qwenpawmail-mcp/src/qwenpawmail_mcp ./packages/qwenpawmail-mcp/src/qwenpawmail_mcp
+RUN python -m pip install --no-cache-dir ".[cloud,office]"
+COPY --from=node-deps /opt/qwenpaw-office-node /opt/qwenpaw-office-node
+
+# A broken or incomplete Skill/dependency inventory makes the image build fail.
+RUN python -m qwenpaw_cloud.office_runtime --require-ready
+
+USER 10001:10001
+WORKDIR /attempts
+ENTRYPOINT ["python", "-m", "qwenpaw_cloud"]

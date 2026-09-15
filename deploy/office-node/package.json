@@ -1,0 +1,12 @@
+{
+  "name": "qwenpaw-office-runtime",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "docx": "9.5.1",
+    "pptxgenjs": "4.0.1"
+  },
+  "overrides": {
+    "image-size": "2.0.4"
+  }
+}

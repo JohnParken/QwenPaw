@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import time
@@ -25,6 +27,7 @@ class Worker:
         root: Path,
         runtime_identity: RuntimeIdentity,
         executor: str = "fixture",
+        model_config: dict | None = None,
         limits: Limits | None = None,
     ):
         self.worker_id, self.file_url = worker_id, file_url
@@ -34,6 +37,18 @@ class Worker:
             executor,
         )
         self.limits = limits or Limits()
+        self.model_config = dict(model_config or {})
+        if (
+            self.executor == "office-agent"
+            and self.model_config.get("shell_mode") == "trusted_container"
+            and hasattr(os, "geteuid")
+            and os.geteuid() == 0
+        ):
+            raise ValueError("TRUSTED_CONTAINER_REQUIRES_NON_ROOT")
+        if self.executor == "office-agent":
+            from .office_runtime import validate_runtime_inventory
+
+            validate_runtime_inventory()
         from .identity import local_identity
 
         if runtime_identity != local_identity():
@@ -113,14 +128,59 @@ class Worker:
                     pass
 
         renewal = asyncio.create_task(heartbeat())
+        snapshot_stop = asyncio.Event()
+
+        async def snapshots():
+            sequence = 0
+            previous = ""
+            while not snapshot_stop.is_set():
+                live = paths.root / "state" / "live.json"
+                try:
+                    value = json.loads(live.read_text(encoding="utf-8"))
+                    text = value.get("text", "")
+                    if isinstance(text, str) and text != previous:
+                        sequence += 1
+                        previous = text
+                        await asyncio.to_thread(
+                            self.core.post,
+                            "/v1/snapshot",
+                            {**action, "sequence": sequence, "text": text[-65536:]},
+                        )
+                except (FileNotFoundError, OSError, ValueError):
+                    pass
+                try:
+                    await asyncio.wait_for(snapshot_stop.wait(), 2)
+                except asyncio.TimeoutError:
+                    pass
+
+        snapshot_task = (
+            asyncio.create_task(snapshots())
+            if self.executor == "office-agent"
+            else None
+        )
         boundary_sent = False
         try:
-            input_data = json.loads(
-                await asyncio.to_thread(
-                    files.download, assignment["input_ref"]
+            used_names: set[str] = set()
+            for index, raw_ref in enumerate(assignment.get("attachments", [])):
+                from .contracts import FileRef
+
+                ref = FileRef.model_validate(raw_ref)
+                candidate = Path(ref.name or f"attachment-{index + 1}").name
+                if candidate in {"", ".", ".."} or candidate in used_names:
+                    candidate = f"attachment-{index + 1}"
+                used_names.add(candidate)
+                data = await asyncio.to_thread(files.download, raw_ref)
+                (paths.root / "input" / candidate).write_bytes(data)
+            paths.seal_inputs()
+            if assignment["input_ref"] is not None:
+                input_data = json.loads(
+                    await asyncio.to_thread(
+                        files.download, assignment["input_ref"]
+                    )
                 )
-            )
-            if (
+            else:
+                input_data = {"marker": assignment.get("message") or "office-turn"}
+            if self.executor != "office-agent" and (
                 set(input_data) != {"marker"}
                 or not isinstance(input_data["marker"], str)
                 or len(input_data["marker"]) > 80
@@ -187,6 +247,7 @@ class Worker:
                         "index": index,
                     },
                     "handshake": True,
+                    "model_config": self.model_config,
                 },
                 native=self.executor == "native",
                 watchdog=watchdog,
@@ -210,6 +271,63 @@ class Worker:
             conversation = await asyncio.to_thread(
                 files.upload, context.scope.model_dump(), canonical(export)
             )
+            if self.executor == "office-agent":
+                request_id = hashlib.sha256(
+                    (context.run_id + ":final").encode()
+                ).hexdigest()[:32]
+                from .verification import verify_artifact
+
+                for path in sorted((paths.root / "output").rglob("*")):
+                    if not path.is_file() or path.is_symlink():
+                        continue
+                    result = verify_artifact(path)
+                    ref = await asyncio.to_thread(
+                        files.upload,
+                        context.scope.model_dump(),
+                        path.read_bytes(),
+                    )
+                    ref["name"] = path.name
+                    artifact_key = hashlib.sha256(
+                        (
+                            context.run_id
+                            + ":"
+                            + path.relative_to(paths.root).as_posix()
+                        ).encode()
+                    ).hexdigest()[:32]
+                    await asyncio.to_thread(
+                        self.core.post,
+                        "/v1/artifacts",
+                        {
+                            **action,
+                            "request_id": artifact_key,
+                            "artifact_id": artifact_key,
+                            "output_path": path.relative_to(paths.root).as_posix(),
+                            "file_ref": ref,
+                            "verification": result.as_dict(),
+                        },
+                    )
+                await asyncio.to_thread(
+                    self.core.post,
+                    "/v1/final-commits",
+                    {
+                        **action,
+                        "request_id": request_id,
+                        "conversation_ref": conversation,
+                        "final_text": export.get("final_text", ""),
+                    },
+                )
+                result = await asyncio.to_thread(
+                    self.core.post,
+                    "/v1/boundary",
+                    {**action, "action": "finish"},
+                )
+                boundary_sent = True
+                return {
+                    **result,
+                    "run_id": context.run_id,
+                    "attempt_id": context.attempt_id,
+                    "revision": context.base_revision + 1,
+                }
             file_refs = {}
             for name, encoded in export["files"].items():
                 file_refs[name] = await asyncio.to_thread(
@@ -253,6 +371,9 @@ class Worker:
                 "export": export,
             }
         finally:
+            snapshot_stop.set()
+            if snapshot_task is not None:
+                await snapshot_task
             heartbeat_stop.set()
             await renewal
             if not boundary_sent:

@@ -5,6 +5,14 @@ INSERT INTO harness.admission VALUES(1) ON CONFLICT DO NOTHING;
 CREATE TABLE IF NOT EXISTS harness.scopes(id text PRIMARY KEY, data jsonb NOT NULL,
  CHECK(data->>'tenant_id' IS NOT NULL AND data->>'owner_user_id' IS NOT NULL),
  CHECK((data->>'revision')::bigint >= 0));
+CREATE TABLE IF NOT EXISTS harness.sessions(id text PRIMARY KEY, data jsonb NOT NULL,
+ CHECK(data->>'tenant_id' IS NOT NULL AND data->>'owner_user_id' IS NOT NULL),
+ CHECK(data->>'state' IN ('ACTIVE','DELETED')));
+CREATE INDEX IF NOT EXISTS sessions_owner ON harness.sessions(
+ (data->>'tenant_id'), (data->>'owner_user_id'), (data->>'created_at'));
+CREATE TABLE IF NOT EXISTS harness.messages(id text PRIMARY KEY, data jsonb NOT NULL,
+ CHECK(data->>'session_id' IS NOT NULL),
+ CHECK(data->>'role' IN ('user','assistant')));
 CREATE TABLE IF NOT EXISTS harness.runs(id text PRIMARY KEY, data jsonb NOT NULL,
  CHECK(data->>'scope_key' IS NOT NULL),
  CHECK(data->>'state' IN ('QUEUED','STARTING','RUNNING','RECOVERING','SUCCEEDED','FAILED','CANCELLED','TIMED_OUT')));
@@ -21,3 +29,7 @@ CREATE TABLE IF NOT EXISTS harness.requests(id text PRIMARY KEY, data jsonb NOT 
 CREATE TABLE IF NOT EXISTS harness.commits(id text PRIMARY KEY, data jsonb NOT NULL,
  CHECK(data->>'state' IN ('PREPARING','PINNED','COMMITTED','ABORTED')));
 CREATE TABLE IF NOT EXISTS harness.events(id text PRIMARY KEY, data jsonb NOT NULL);
+CREATE TABLE IF NOT EXISTS harness.snapshots(id text PRIMARY KEY, data jsonb NOT NULL,
+ CHECK(data->>'run_id' IS NOT NULL));
+CREATE TABLE IF NOT EXISTS harness.artifacts(id text PRIMARY KEY, data jsonb NOT NULL,
+ CHECK(data->>'run_id' IS NOT NULL AND data->>'file_ref' IS NOT NULL));

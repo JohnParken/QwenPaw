@@ -26,7 +26,12 @@ class Config(Wire):
     root: str
     worker_id: str | None = None
     runtime_identity: RuntimeIdentity
-    executor: Literal["fixture", "native"] = "fixture"
+    executor: Literal["fixture", "native", "office-agent"] = "fixture"
+    model_provider: Literal["tl", "openai"] | None = None
+    model_id: str | None = None
+    model_base_url: str | None = None
+    model_credential_file: str | None = None
+    shell_mode: Literal["sandboxed", "trusted_container"] = "sandboxed"
     limits: Limits = Limits()
 
     @model_validator(mode="after")
@@ -41,6 +46,16 @@ class Config(Wire):
                 raise ValueError(
                     "Worker receives only its token, never DSN/signing key"
                 )
+            if self.executor == "office-agent" and (
+                not self.model_provider
+                or not self.model_id
+                or not self.model_base_url
+            ):
+                raise ValueError(
+                    "office-agent requires provider, model and base URL"
+                )
+            if self.model_provider == "openai" and not self.model_credential_file:
+                raise ValueError("OpenAI requires a credential file")
         elif not self.dsn or not self.signing_key_file:
             raise ValueError(
                 "Core/File roles require their own database and service key"
@@ -88,6 +103,21 @@ def main():
             root=Path(config.root),
             runtime_identity=config.runtime_identity,
             executor=config.executor,
+            model_config=(
+                {
+                    "provider": config.model_provider,
+                    "model": config.model_id,
+                    "base_url": config.model_base_url,
+                    "api_key": (
+                        Path(config.model_credential_file).read_text().strip()
+                        if config.model_credential_file
+                        else ""
+                    ),
+                    "shell_mode": config.shell_mode,
+                }
+                if config.executor == "office-agent"
+                else None
+            ),
             limits=config.limits,
         )
         if args.once:

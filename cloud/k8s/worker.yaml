@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qwenpaw-agent-worker
+spec:
+  replicas: 20
+  selector:
+    matchLabels: {app: qwenpaw-agent-worker}
+  template:
+    metadata:
+      labels: {app: qwenpaw-agent-worker}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: worker
+          image: qwenpaw-agent:VERSION_REQUIRED
+          args: ["worker", "--config", "/etc/qwenpaw/worker.json"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          resources:
+            requests: {cpu: "500m", memory: "1Gi"}
+            limits: {cpu: "2", memory: "4Gi"}
+          volumeMounts:
+            - {name: attempts, mountPath: /attempts}
+            - {name: tmp, mountPath: /tmp}
+            - {name: config, mountPath: /etc/qwenpaw, readOnly: true}
+      volumes:
+        - name: attempts
+          emptyDir: {sizeLimit: 8Gi}
+        - name: tmp
+          emptyDir: {sizeLimit: 1Gi}
+        - name: config
+          secret: {secretName: qwenpaw-worker-config}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: qwenpaw-agent-worker-egress
+spec:
+  podSelector:
+    matchLabels: {app: qwenpaw-agent-worker}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - {protocol: TCP, port: 18080}
+        - {protocol: TCP, port: 18081}
+        - {protocol: TCP, port: 443}

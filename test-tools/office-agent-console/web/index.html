@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Office Agent Console</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header><h1>Office Agent Console</h1><p id="status" class="status">未创建会话</p></header>
+    <section class="card">
+      <h2>创建会话</h2>
+      <form id="session-form">
+        <label for="files">选择文件（可多选）</label>
+        <input id="files" name="files" type="file" multiple>
+        <button type="submit">上传并创建会话</button>
+      </form>
+    </section>
+    <section class="card conversation">
+      <h2>消息</h2>
+      <div id="messages" class="messages" aria-live="polite"></div>
+      <form id="message-form" class="composer">
+        <textarea id="message" rows="3" placeholder="输入指令…" disabled required></textarea>
+        <button id="send" type="submit" disabled>发送</button>
+      </form>
+    </section>
+    <section class="card"><h2>产物</h2><ul id="artifacts" class="artifacts"><li class="muted">暂无产物</li></ul></section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

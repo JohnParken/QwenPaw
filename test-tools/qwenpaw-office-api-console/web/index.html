@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QwenPaw Office API 测试台</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">QP</span>
+        <div><strong>Office Agent</strong><small>原生测试控制台</small></div>
+      </div>
+
+      <section>
+        <h2>连接</h2>
+        <label>API 目标<input id="api-target" readonly value="正在读取…"></label>
+        <label>Tenant ID<input id="tenant-id" value="test-tenant" maxlength="128"></label>
+        <label>User ID<input id="user-id" value="test-user" maxlength="128"></label>
+        <div class="button-row">
+          <button id="check-health" type="button" class="secondary">检查服务</button>
+          <span id="health-badge" class="badge neutral">未检查</span>
+        </div>
+      </section>
+
+      <section>
+        <h2>会话</h2>
+        <label>Session ID<input id="session-id" readonly placeholder="尚未创建"></label>
+        <div class="button-row">
+          <button id="create-session" type="button">新建</button>
+          <button id="close-session" type="button" class="danger" disabled>关闭</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>执行选项</h2>
+        <label>Provider
+          <select id="provider"><option value="openai">OpenAI</option><option value="tlprovider">TLProvider</option></select>
+        </label>
+        <label>响应方式
+          <select id="response-mode"><option value="sse">SSE 流式</option><option value="json">JSON</option></select>
+        </label>
+      </section>
+
+      <section>
+        <h2>Skill readiness</h2>
+        <ul id="skills" class="compact-list"><li class="muted">尚未检查</li></ul>
+      </section>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div><h1>Agent 核心能力测试</h1><p id="status">请先检查服务并创建会话</p></div>
+        <button id="cancel-turn" type="button" class="danger" disabled>取消执行</button>
+      </header>
+
+      <section class="panel files-panel">
+        <div class="panel-heading"><div><h2>输入文件</h2><p>上传后勾选需要随下一条消息发送的文件</p></div></div>
+        <div class="upload-row">
+          <input id="file-picker" type="file" multiple>
+          <button id="upload-files" type="button" disabled>上传文件</button>
+        </div>
+        <div id="files" class="file-grid"><p class="empty">暂无文件</p></div>
+      </section>
+
+      <section class="panel conversation-panel">
+        <div id="messages" class="messages" aria-live="polite">
+          <div class="welcome"><strong>可以测试什么？</strong><span>上传文档或数据，然后让 Agent 分析、改写、生成并发布新的办公产物。</span></div>
+        </div>
+        <form id="message-form" class="composer">
+          <textarea id="message" rows="4" placeholder="例如：分析上传的销售数据，生成带图表的 Excel 和一页总结。" disabled required></textarea>
+          <div class="composer-actions">
+            <span id="attachment-count">0 个附件</span>
+            <button id="send-message" type="submit" disabled>发送</button>
+          </div>
+        </form>
+      </section>
+
+      <div class="lower-grid">
+        <section class="panel">
+          <div class="panel-heading"><h2>产物</h2><button id="refresh-artifacts" type="button" class="text-button" disabled>刷新</button></div>
+          <div id="artifacts"><p class="empty">暂无产物</p></div>
+        </section>
+        <section class="panel">
+          <div class="panel-heading"><h2>执行事件</h2><button id="clear-events" type="button" class="text-button">清空</button></div>
+          <ol id="events" class="event-list"><li class="muted">等待执行</li></ol>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

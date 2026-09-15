@@ -21,7 +21,7 @@ from .contracts import ExecutionContext, RuntimeIdentity, Scope
 
 PROTOCOL_VERSION = "p0.v1"
 MAX_FILE_BYTES = 1_048_576
-MAX_MARKER_BYTES = 4_096
+MAX_MARKER_BYTES = 32_768
 MAX_FILE_ENTRIES = 1_024
 MAX_TOTAL_FILE_BYTES = 8 * MAX_FILE_BYTES
 _SOURCE_ROOT = Path(__file__).resolve().parents[2]
@@ -330,6 +330,30 @@ def _validate_tool_associations(conversation: Any) -> None:
         raise RunnerError(f"tool calls without results: {missing}")
 
 
+def _validate_office_conversation(conversation: Any) -> None:
+    """Ensure every persisted tool result belongs to a preceding call."""
+    calls: dict[str, str] = {}
+    completed: set[str] = set()
+    for message in _conversation_context(conversation):
+        for block in message["content"]:
+            if not isinstance(block, dict):
+                raise RunnerError("conversation contains an invalid block")
+            if block.get("type") == "tool_call":
+                call_id, name = block.get("id"), block.get("name")
+                if not isinstance(call_id, str) or not isinstance(name, str):
+                    raise RunnerError("invalid office tool call")
+                if call_id in calls:
+                    raise RunnerError("duplicate office tool call")
+                calls[call_id] = name
+            elif block.get("type") == "tool_result":
+                call_id, name = block.get("id"), block.get("name")
+                if calls.get(call_id) != name or call_id in completed:
+                    raise RunnerError("orphan office tool result")
+                completed.add(call_id)
+    if set(calls) != completed:
+        raise RunnerError("office tool calls without results")
+
+
 class _DeterministicChatModel:
     """Late-bound ChatModelBase subclass used only by the native builder."""
 
@@ -539,6 +563,7 @@ class Runner:
         root: str | Path,
         *,
         executor: str = "fixture",
+        model_config: Mapping[str, str] | None = None,
         memory: NullMemory | None = None,
     ) -> None:
         try:
@@ -550,8 +575,8 @@ class Runner:
         except Exception as exc:
             raise RunnerError("invalid execution context") from exc
         _validate_context(self.context)
-        if executor not in {"fixture", "native"}:
-            raise RunnerError("executor must be fixture or native")
+        if executor not in {"fixture", "native", "office-agent"}:
+            raise RunnerError("unsupported executor")
         raw_root = Path(root).expanduser()
         if not raw_root.is_absolute():
             raise RunnerError("root must be an absolute path")
@@ -565,6 +590,9 @@ class Runner:
         if self.root.exists() and not self.root.is_dir():
             raise RunnerError("root must be a directory")
         self.executor = executor
+        self.model_config = dict(model_config or {})
+        if executor == "office-agent" and not self.model_config:
+            raise RunnerError("office-agent model config is required")
         self.memory = memory or NullMemory()
         self.workspace_dir = self.root / "workspace"
         self._config_root = self.root / ".qwenpaw"
@@ -583,6 +611,7 @@ class Runner:
         self._barrier_id: str | None = None
         self._phase = "NEW"
         self._restore_fingerprint: str | None = None
+        self._final_text = ""
 
     async def initialize(
         self,
@@ -672,6 +701,8 @@ class Runner:
             "memory",
             "executor",
         }
+        if committed_manifest.get("executor") == "office-agent":
+            allowed.add("final_text")
         if set(committed_manifest) != allowed:
             raise RunnerError("restore export has an invalid field set")
         if committed_manifest.get("schema") != PROTOCOL_VERSION:
@@ -700,7 +731,10 @@ class Runner:
         if committed_manifest.get("memory") is not None:
             raise RunnerError("P0 export memory must be null")
         conversation = _json_copy(committed_manifest.get("conversation"))
-        _validate_tool_associations(conversation)
+        if self.executor == "office-agent":
+            _validate_office_conversation(conversation)
+        else:
+            _validate_tool_associations(conversation)
         files = committed_manifest.get("files")
         if not isinstance(files, dict):
             raise RunnerError("export files must be an object")
@@ -792,8 +826,10 @@ class Runner:
         try:
             if self.executor == "fixture":
                 self._execute_fixture(marker, index)
-            else:
+            elif self.executor == "native":
                 await self._execute_native(marker, index)
+            else:
+                await self._execute_office(marker)
         except Exception:
             self._phase = "FAILED"
             raise
@@ -914,6 +950,30 @@ class Runner:
         self._conversation = _json_copy(state)
         _validate_tool_associations(self._conversation)
 
+    async def _execute_office(self, message: str) -> None:
+        from .office_agent import OfficeAgentBridge
+        from .sandbox import PathMap
+
+        async def snapshot(text: str) -> None:
+            target = self.root / "state" / "live.json"
+            temporary = target.with_suffix(".tmp")
+            temporary.write_text(
+                json.dumps({"text": text}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            temporary.replace(target)
+
+        bridge = OfficeAgentBridge(
+            PathMap(self.root),
+            self.model_config,
+            on_text=snapshot,
+            shell_mode=self.model_config.get("shell_mode", "sandboxed"),
+        )
+        result = await bridge.run(message, self._conversation)
+        self._conversation = _json_copy(result["conversation"])
+        self._final_text = str(result.get("text") or "")
+        _validate_office_conversation(self._conversation)
+
     async def quiesce(
         self,
         reason: str = "completed",
@@ -949,7 +1009,10 @@ class Runner:
             raise RunnerError("checkpoint_id must be non-empty")
         await self.memory.export_snapshot(self._barrier_id, checkpoint_id)
         conversation = _json_copy(self._conversation)
-        _validate_tool_associations(conversation)
+        if self.executor == "office-agent":
+            _validate_office_conversation(conversation)
+        else:
+            _validate_tool_associations(conversation)
         files: dict[str, str] = {}
         total_bytes = 0
         if self.workspace_dir.exists():
@@ -989,6 +1052,8 @@ class Runner:
             "memory": None,
             "executor": self.executor,
         }
+        if self.executor == "office-agent":
+            export["final_text"] = self._final_text
         return _json_copy(export)
 
     async def close(self, deadline: float | None = None) -> None:

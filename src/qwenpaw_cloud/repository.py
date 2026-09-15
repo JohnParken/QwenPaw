@@ -14,12 +14,16 @@ import threading
 
 TABLES = (
     "scopes",
+    "sessions",
+    "messages",
     "runs",
     "attempts",
     "workers",
     "requests",
     "commits",
     "events",
+    "snapshots",
+    "artifacts",
 )
 
 
