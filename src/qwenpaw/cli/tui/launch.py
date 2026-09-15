@@ -17,6 +17,7 @@ subcommands stay fast.
 from __future__ import annotations
 
 import json
+import importlib.util
 from pathlib import Path
 import shlex
 import subprocess
@@ -172,6 +173,11 @@ def run_tui(
     project: str | None = None,
 ) -> None:
     """Build the transport and run the Textual app (blocking)."""
+    if importlib.util.find_spec("textual") is None:
+        raise click.ClickException(
+            "Install desktop dependencies with: "
+            "pip install 'qwenpaw[desktop]'",
+        )
     from .compat import apply_textual_compat
 
     apply_textual_compat()

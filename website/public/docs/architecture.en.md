@@ -419,7 +419,7 @@ See [Security](./security) for the full policy model and configuration.
 
 QwenPaw runs as a **long-lived service**, on your own machine or a server you control, with several front doors into the same runtime. Whichever surface you use, the agents, workspaces, memory, and policy underneath are the same.
 
-<svg viewBox="0 0 860 290" width="100%" role="img" aria-label="One QwenPaw runtime reached through several surfaces (Console, desktop app, terminal UI, CLI, chat channels) and surrounded by operational capabilities (scheduling, inbox, backup)." xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">
+<svg viewBox="0 0 860 250" width="100%" role="img" aria-label="One QwenPaw runtime reached through several surfaces (Console, terminal UI, CLI, chat channels) and surrounded by operational capabilities (scheduling, inbox, backup)." xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">
   <defs>
     <marker id="qpSurfArrow" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
       <path d="M0,0 L6,3 L0,6 Z" fill="#ff9d4d"/>
@@ -429,10 +429,9 @@ QwenPaw runs as a **long-lived service**, on your own machine or a server you co
   <text x="24" y="34" font-size="11" letter-spacing="1.5" font-weight="700" fill="#ff9d4d">SURFACES · how you reach it</text>
   <g font-size="12" fill="currentColor">
     <rect x="24" y="46" width="252" height="32" rx="7" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.25"/><text x="150" y="66" text-anchor="middle">Console — web hub</text>
-    <rect x="24" y="86" width="252" height="32" rx="7" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.25"/><text x="150" y="106" text-anchor="middle">Desktop app (Beta)</text>
-    <rect x="24" y="126" width="252" height="32" rx="7" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.25"/><text x="150" y="146" text-anchor="middle">Terminal UI</text>
-    <rect x="24" y="166" width="252" height="32" rx="7" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.25"/><text x="150" y="186" text-anchor="middle">CLI + doctor</text>
-    <rect x="24" y="206" width="252" height="32" rx="7" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.25"/><text x="150" y="226" text-anchor="middle">Chat channels</text>
+    <rect x="24" y="86" width="252" height="32" rx="7" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.25"/><text x="150" y="106" text-anchor="middle">Terminal UI</text>
+    <rect x="24" y="126" width="252" height="32" rx="7" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.25"/><text x="150" y="146" text-anchor="middle">CLI + doctor</text>
+    <rect x="24" y="166" width="252" height="32" rx="7" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.25"/><text x="150" y="186" text-anchor="middle">Chat channels</text>
   </g>
   <line x1="282" y1="150" x2="322" y2="150" stroke="#ff9d4d" stroke-width="1.5" marker-end="url(#qpSurfArrow)"/>
   <text x="302" y="142" text-anchor="middle" font-size="9.5" fill="currentColor" fill-opacity="0.6">reach</text>
@@ -455,7 +454,6 @@ QwenPaw runs as a **long-lived service**, on your own machine or a server you co
 ### Surfaces
 
 - **Console** — the primary web interface and management hub: real-time streaming chat plus configuration for agents, channels, models, skills and the skill market, connectors, security and approvals, backups, token usage, scheduled jobs, and a proactive-message inbox. See [Console](./console).
-- **Desktop app** — the Console packaged as a cross-platform desktop application (Beta) with a bundled runtime and automatic updates, so it runs with no terminal and no manual setup. See [Desktop App](./desktop).
 - **Terminal UI** — a full-screen terminal interface for chatting and managing agents from the shell, including project-scoped coding sessions; the bare `qwenpaw` command launches it. See [Terminal UI](./tui).
 - **CLI** — scriptable `qwenpaw` commands for agents, providers, channels, skills, connectors, and scheduling, plus `qwenpaw doctor` for one-shot diagnostics and guided fixes. See [CLI](./cli).
 - **Chat channels** — every messaging platform is itself a surface: people reach the agent from DingTalk, Feishu, Slack, Discord, and more. See [Channels](./channels).

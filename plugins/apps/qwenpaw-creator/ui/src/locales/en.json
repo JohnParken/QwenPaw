@@ -1699,8 +1699,7 @@
       "review_scene": "Review edit scene",
       "view_skill": "Read creative guide",
       "ground_image_objects": "Identify image objects",
-      "browser_use": "Interact with webpage",
-      "computer_use": "Interact with desktop app"
+      "browser_use": "Interact with webpage"
     },
     "skillGuides": {
       "visualDesign": "Read visual design guide",
@@ -1758,8 +1757,7 @@
       "review_scene": "Reviewing edit scene…",
       "view_skill": "Reading creative guide…",
       "ground_image_objects": "Identifying image objects…",
-      "browser_use": "Interacting with webpage…",
-      "computer_use": "Interacting with desktop app…"
+      "browser_use": "Interacting with webpage…"
     },
     "productionAssistant": "Production Assistant",
     "estimatedDurations": {

@@ -708,6 +708,20 @@ def convert_model_exception(  # pylint: disable=too-many-return-statements
         "original_error_message": str(exc),
     }
 
+    # TL carries typed stages. Model-produced field names/messages must not
+    # be interpreted as authentication keywords (e.g. "invalid keys").
+    from .providers.tl_errors import TLError
+
+    if isinstance(exc, TLError) and exc.stage in {
+        "response_parse", "tool_args_validation", "prompt_encode",
+        "configuration",
+    }:
+        model = model_name or "unknown"
+        details["model_name"] = model
+        return _append_error_detail(
+            ModelExecutionException(model, details=details), exc
+        )
+
     # Level 0: Check if this is a model-related error
     if not _is_model_related_error(exc):
         # Non-model error: wrap as UnknownAgentException

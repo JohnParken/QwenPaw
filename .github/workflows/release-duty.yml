@@ -1,6 +1,6 @@
 # Auto-create a Release Duty issue for every published release
 # (pre-release, stable, and post-release).
-# Each platform gets its own assignee from an independent rotation list.
+# Each product gets its own assignee from an independent rotation list.
 # Rotation is sequential: index = (number of releases published BEFORE
 # this one) % list length. Stateless — derived from the GitHub Releases API.
 # Supports manual dispatch for testing or re-triggering a missed duty issue.
@@ -136,7 +136,7 @@ jobs:
               roster = yaml.safe_load(f)
 
           result = {}
-          for platform in ("pypi", "docker", "macos", "windows"):
+          for platform in ("pypi", "docker"):
               rotation = roster.get(platform, {}).get("rotation", [])
               if rotation:
                   slot = idx % len(rotation)
@@ -220,7 +220,7 @@ jobs:
 
             ## Pass Criteria
 
-            A platform **passes** only when all four checkpoints are green:
+            A product **passes** only when all four checkpoints are green:
 
             | Checkpoint | What to verify |
             |------------|---------------|
@@ -265,44 +265,12 @@ jobs:
 
             ---
 
-            ## macOS Desktop — ${mention('macos')}
-
-            1. Go to the [Release page](${releaseUrl})
-            2. Download \`QwenPaw-${version}-macOS.zip\`
-            3. Unzip, drag \`QwenPaw.app\` to Applications, launch
-
-            - [ ] Download and unzip succeed
-            - [ ] App launches without crash
-            - [ ] Model configured (API key + model saved without error)
-            - [ ] Basic chat works (message sent, normal reply received)
-
-            **Environment:** macOS version: &nbsp; / Chip (Apple Silicon / Intel): &nbsp; / Notes:
-
-            ---
-
-            ## Windows Desktop — ${mention('windows')}
-
-            1. Go to the [Release page](${releaseUrl})
-            2. Download \`QwenPaw-Setup-${version}.exe\`
-            3. Run the installer, follow the wizard, launch QwenPaw
-
-            - [ ] Installer runs without error
-            - [ ] App launches without crash
-            - [ ] Model configured (API key + model saved without error)
-            - [ ] Basic chat works (message sent, normal reply received)
-
-            **Environment:** Windows version: &nbsp; / Notes:
-
-            ---
-
             ## Summary
 
             | Platform | Result | Assignee |
             |----------|--------|----------|
             | PyPI | ⬜ PENDING | ${mention('pypi')} |
             | Docker | ⬜ PENDING | ${mention('docker')} |
-            | macOS Desktop | ⬜ PENDING | ${mention('macos')} |
-            | Windows Desktop | ⬜ PENDING | ${mention('windows')} |
 
             **All PASS** → close this issue with label \`verified\`. Release proceeds normally.
 

@@ -418,7 +418,7 @@ QwenPaw 把**频道**（人怎么联系到智能体）和**驱动**（智能体�
 
 QwenPaw 是一个常驻服务，装在你自己的机器上、或你说了算的服务器上都行，并提供好几个入口通向同一个运行时。不管走哪个入口，底层的智能体、工作区、记忆和策略都是同一套。
 
-<svg viewBox="0 0 860 290" width="100%" role="img" aria-label="同一个 QwenPaw 运行时由多个入口（控制台、桌面应用、终端 UI、CLI、聊天频道）接入，周围是各项运维能力（定时任务、收件箱、备份）。" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">
+<svg viewBox="0 0 860 250" width="100%" role="img" aria-label="同一个 QwenPaw 运行时由多个入口（控制台、终端 UI、CLI、聊天频道）接入，周围是各项运维能力（定时任务、收件箱、备份）。" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">
   <defs>
     <marker id="qpSurfArrow" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
       <path d="M0,0 L6,3 L0,6 Z" fill="#ff9d4d"/>
@@ -428,10 +428,9 @@ QwenPaw 是一个常驻服务，装在你自己的机器上、或你说了算的
   <text x="24" y="34" font-size="11" letter-spacing="1.5" font-weight="700" fill="#ff9d4d">入口 · 你从哪里进来</text>
   <g font-size="12" fill="currentColor">
     <rect x="24" y="46" width="252" height="32" rx="7" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.25"/><text x="150" y="66" text-anchor="middle">控制台 — Web 枢纽</text>
-    <rect x="24" y="86" width="252" height="32" rx="7" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.25"/><text x="150" y="106" text-anchor="middle">桌面应用（Beta）</text>
-    <rect x="24" y="126" width="252" height="32" rx="7" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.25"/><text x="150" y="146" text-anchor="middle">终端 UI</text>
-    <rect x="24" y="166" width="252" height="32" rx="7" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.25"/><text x="150" y="186" text-anchor="middle">CLI + doctor</text>
-    <rect x="24" y="206" width="252" height="32" rx="7" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.25"/><text x="150" y="226" text-anchor="middle">聊天频道</text>
+    <rect x="24" y="86" width="252" height="32" rx="7" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.25"/><text x="150" y="106" text-anchor="middle">终端 UI</text>
+    <rect x="24" y="126" width="252" height="32" rx="7" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.25"/><text x="150" y="146" text-anchor="middle">CLI + doctor</text>
+    <rect x="24" y="166" width="252" height="32" rx="7" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.25"/><text x="150" y="186" text-anchor="middle">聊天频道</text>
   </g>
   <line x1="282" y1="150" x2="322" y2="150" stroke="#ff9d4d" stroke-width="1.5" marker-end="url(#qpSurfArrow)"/>
   <text x="302" y="142" text-anchor="middle" font-size="9.5" fill="currentColor" fill-opacity="0.6">访问</text>
@@ -454,7 +453,6 @@ QwenPaw 是一个常驻服务，装在你自己的机器上、或你说了算的
 ### 入口
 
 - **控制台**——主要的 Web 界面，也是管理中枢：能实时流式聊天，还能配置智能体、频道、模型、Skills 和技能市场、连接器、安全与审批、备份、Token 用量、定时任务，以及主动消息收件箱。参见[控制台](./console)。
-- **桌面应用**——把控制台打包成的跨平台桌面应用（Beta），内置运行时、支持自动更新，不用开终端、不用手动配置就能跑起来。参见[桌面应用](./desktop)。
 - **终端 UI**——一个全屏的终端界面，在 shell 里就能聊天和管理智能体，也支持按项目划分的编码会话；直接敲 `qwenpaw` 就能打开。参见[终端 UI](./tui)。
 - **CLI**——能写进脚本的 `qwenpaw` 命令，用来管理智能体、提供商、频道、Skills、连接器和定时任务，还有 `qwenpaw doctor` 做一次性诊断和带引导的修复。参见 [CLI](./cli)。
 - **聊天频道**——每个消息平台本身就是一个入口：钉钉、飞书、Slack、Discord 等等，都能直接找到智能体。参见[频道](./channels)。

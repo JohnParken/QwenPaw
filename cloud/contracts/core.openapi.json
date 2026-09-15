@@ -1,0 +1,1189 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "QwenPaw P0 control",
+    "version": "p0.v1"
+  },
+  "paths": {
+    "/v1/runs": {
+      "post": {
+        "summary": "Create",
+        "operationId": "create_v1_runs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRun"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid service identity"
+          },
+          "403": {
+            "description": "Scope or assignment forbidden"
+          },
+          "409": {
+            "description": "Stale lease/revision or idempotency conflict"
+          },
+          "413": {
+            "description": "Bounded body exceeded"
+          },
+          "426": {
+            "description": "Unsupported protocol version"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Protocol-Version",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "p0.v1"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/v1/runs/{run_id}": {
+      "get": {
+        "summary": "Query Run",
+        "operationId": "query_run_v1_runs__run_id__get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "X-Protocol-Version",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "p0.v1"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid service identity"
+          },
+          "403": {
+            "description": "Scope or assignment forbidden"
+          },
+          "409": {
+            "description": "Stale lease/revision or idempotency conflict"
+          },
+          "413": {
+            "description": "Bounded body exceeded"
+          },
+          "426": {
+            "description": "Unsupported protocol version"
+          }
+        }
+      }
+    },
+    "/v1/workers/register": {
+      "post": {
+        "summary": "Register",
+        "operationId": "register_v1_workers_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Register"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid service identity"
+          },
+          "403": {
+            "description": "Scope or assignment forbidden"
+          },
+          "409": {
+            "description": "Stale lease/revision or idempotency conflict"
+          },
+          "413": {
+            "description": "Bounded body exceeded"
+          },
+          "426": {
+            "description": "Unsupported protocol version"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Protocol-Version",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "p0.v1"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/v1/claim": {
+      "post": {
+        "summary": "Claim",
+        "operationId": "claim_v1_claim_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Claim"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid service identity"
+          },
+          "403": {
+            "description": "Scope or assignment forbidden"
+          },
+          "409": {
+            "description": "Stale lease/revision or idempotency conflict"
+          },
+          "413": {
+            "description": "Bounded body exceeded"
+          },
+          "426": {
+            "description": "Unsupported protocol version"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Protocol-Version",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "p0.v1"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/v1/claims/{request_id}": {
+      "get": {
+        "summary": "Query Claim",
+        "operationId": "query_claim_v1_claims__request_id__get",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Request Id"
+            }
+          },
+          {
+            "name": "X-Protocol-Version",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "p0.v1"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid service identity"
+          },
+          "403": {
+            "description": "Scope or assignment forbidden"
+          },
+          "409": {
+            "description": "Stale lease/revision or idempotency conflict"
+          },
+          "413": {
+            "description": "Bounded body exceeded"
+          },
+          "426": {
+            "description": "Unsupported protocol version"
+          }
+        }
+      }
+    },
+    "/v1/ready": {
+      "post": {
+        "summary": "Ready",
+        "operationId": "ready_v1_ready_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttemptAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid service identity"
+          },
+          "403": {
+            "description": "Scope or assignment forbidden"
+          },
+          "409": {
+            "description": "Stale lease/revision or idempotency conflict"
+          },
+          "413": {
+            "description": "Bounded body exceeded"
+          },
+          "426": {
+            "description": "Unsupported protocol version"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Protocol-Version",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "p0.v1"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/v1/heartbeat": {
+      "post": {
+        "summary": "Heartbeat",
+        "operationId": "heartbeat_v1_heartbeat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttemptAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid service identity"
+          },
+          "403": {
+            "description": "Scope or assignment forbidden"
+          },
+          "409": {
+            "description": "Stale lease/revision or idempotency conflict"
+          },
+          "413": {
+            "description": "Bounded body exceeded"
+          },
+          "426": {
+            "description": "Unsupported protocol version"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Protocol-Version",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "p0.v1"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/v1/checkpoints": {
+      "post": {
+        "summary": "Checkpoint",
+        "operationId": "checkpoint_v1_checkpoints_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Checkpoint"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid service identity"
+          },
+          "403": {
+            "description": "Scope or assignment forbidden"
+          },
+          "409": {
+            "description": "Stale lease/revision or idempotency conflict"
+          },
+          "413": {
+            "description": "Bounded body exceeded"
+          },
+          "426": {
+            "description": "Unsupported protocol version"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Protocol-Version",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "p0.v1"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/v1/checkpoints/{commit_id}": {
+      "get": {
+        "summary": "Query Checkpoint",
+        "operationId": "query_checkpoint_v1_checkpoints__commit_id__get",
+        "parameters": [
+          {
+            "name": "commit_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Commit Id"
+            }
+          },
+          {
+            "name": "X-Protocol-Version",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "p0.v1"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid service identity"
+          },
+          "403": {
+            "description": "Scope or assignment forbidden"
+          },
+          "409": {
+            "description": "Stale lease/revision or idempotency conflict"
+          },
+          "413": {
+            "description": "Bounded body exceeded"
+          },
+          "426": {
+            "description": "Unsupported protocol version"
+          }
+        }
+      }
+    },
+    "/v1/boundary": {
+      "post": {
+        "summary": "Boundary",
+        "operationId": "boundary_v1_boundary_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Boundary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid service identity"
+          },
+          "403": {
+            "description": "Scope or assignment forbidden"
+          },
+          "409": {
+            "description": "Stale lease/revision or idempotency conflict"
+          },
+          "413": {
+            "description": "Bounded body exceeded"
+          },
+          "426": {
+            "description": "Unsupported protocol version"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Protocol-Version",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "p0.v1"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/v1/cleanup": {
+      "post": {
+        "summary": "Cleanup",
+        "operationId": "cleanup_v1_cleanup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Cleanup"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid service identity"
+          },
+          "403": {
+            "description": "Scope or assignment forbidden"
+          },
+          "409": {
+            "description": "Stale lease/revision or idempotency conflict"
+          },
+          "413": {
+            "description": "Bounded body exceeded"
+          },
+          "426": {
+            "description": "Unsupported protocol version"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Protocol-Version",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "p0.v1"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/v1/recovery/scan": {
+      "post": {
+        "summary": "Scan",
+        "operationId": "scan_v1_recovery_scan_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid service identity"
+          },
+          "403": {
+            "description": "Scope or assignment forbidden"
+          },
+          "409": {
+            "description": "Stale lease/revision or idempotency conflict"
+          },
+          "413": {
+            "description": "Bounded body exceeded"
+          },
+          "422": {
+            "description": "Invalid JSON contract"
+          },
+          "426": {
+            "description": "Unsupported protocol version"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Protocol-Version",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "p0.v1"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AttemptAction": {
+        "properties": {
+          "attempt_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$",
+            "title": "Attempt Id"
+          },
+          "lease_epoch": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Lease Epoch"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "attempt_id",
+          "lease_epoch"
+        ],
+        "title": "AttemptAction"
+      },
+      "Boundary": {
+        "properties": {
+          "attempt_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$",
+            "title": "Attempt Id"
+          },
+          "lease_epoch": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Lease Epoch"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "handoff",
+              "finish",
+              "failed"
+            ],
+            "title": "Action"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "attempt_id",
+          "lease_epoch",
+          "action"
+        ],
+        "title": "Boundary"
+      },
+      "Checkpoint": {
+        "properties": {
+          "attempt_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$",
+            "title": "Attempt Id"
+          },
+          "lease_epoch": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Lease Epoch"
+          },
+          "commit_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$",
+            "title": "Commit Id"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Revision"
+          },
+          "conversation_ref": {
+            "$ref": "#/components/schemas/FileRef"
+          },
+          "files": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FileRef"
+            },
+            "type": "object",
+            "maxProperties": 16,
+            "title": "Files"
+          },
+          "cursor": {
+            "type": "integer",
+            "maximum": 2.0,
+            "minimum": 1.0,
+            "title": "Cursor"
+          },
+          "next_segment": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 2.0,
+            "title": "Next Segment"
+          },
+          "budget": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Budget"
+          },
+          "memory": {
+            "type": "null",
+            "title": "Memory"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "attempt_id",
+          "lease_epoch",
+          "commit_id",
+          "expected_revision",
+          "conversation_ref",
+          "cursor",
+          "next_segment",
+          "budget"
+        ],
+        "title": "Checkpoint"
+      },
+      "Claim": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$",
+            "title": "Request Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id"
+        ],
+        "title": "Claim"
+      },
+      "Cleanup": {
+        "properties": {
+          "attempt_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$",
+            "title": "Attempt Id"
+          },
+          "lease_epoch": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Lease Epoch"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "title": "Confirmed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "attempt_id",
+          "lease_epoch",
+          "confirmed"
+        ],
+        "title": "Cleanup"
+      },
+      "CreateRun": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$",
+            "title": "Request Id"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "session_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$",
+            "title": "Session Id"
+          },
+          "input_ref": {
+            "$ref": "#/components/schemas/FileRef"
+          },
+          "runtime_identity": {
+            "$ref": "#/components/schemas/RuntimeIdentity"
+          },
+          "expected_revision": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Revision"
+          },
+          "base_policy": {
+            "type": "string",
+            "const": "latest_at_claim",
+            "title": "Base Policy",
+            "default": "latest_at_claim"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "scope",
+          "session_id",
+          "input_ref",
+          "runtime_identity"
+        ],
+        "title": "CreateRun"
+      },
+      "FileRef": {
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$",
+            "title": "File Id"
+          },
+          "version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Version",
+            "default": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256"
+          },
+          "size": {
+            "type": "integer",
+            "maximum": 1048576.0,
+            "minimum": 0.0,
+            "title": "Size"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "file_id",
+          "sha256",
+          "size"
+        ],
+        "title": "FileRef"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Register": {
+        "properties": {
+          "worker_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$",
+            "title": "Worker Id"
+          },
+          "runtime_identity": {
+            "$ref": "#/components/schemas/RuntimeIdentity"
+          },
+          "executor": {
+            "type": "string",
+            "enum": [
+              "fixture",
+              "native"
+            ],
+            "title": "Executor"
+          },
+          "slots": {
+            "type": "integer",
+            "const": 1,
+            "title": "Slots",
+            "default": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "worker_id",
+          "runtime_identity",
+          "executor"
+        ],
+        "title": "Register"
+      },
+      "RuntimeIdentity": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "local_bundle",
+            "title": "Kind",
+            "default": "local_bundle"
+          },
+          "commit": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$",
+            "title": "Commit"
+          },
+          "dirty_diff_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Dirty Diff Digest"
+          },
+          "dependency_lock_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Dependency Lock Digest"
+          },
+          "python": {
+            "type": "string",
+            "const": "3.12.11",
+            "title": "Python",
+            "default": "3.12.11"
+          },
+          "arch": {
+            "type": "string",
+            "title": "Arch"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "commit",
+          "dirty_diff_digest",
+          "dependency_lock_digest",
+          "arch"
+        ],
+        "title": "RuntimeIdentity"
+      },
+      "Scope": {
+        "properties": {
+          "tenant_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$",
+            "title": "Tenant Id"
+          },
+          "owner_user_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$",
+            "title": "Owner User Id"
+          },
+          "scope_type": {
+            "type": "string",
+            "enum": [
+              "standalone",
+              "workspace"
+            ],
+            "title": "Scope Type"
+          },
+          "scope_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$",
+            "title": "Scope Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tenant_id",
+          "owner_user_id",
+          "scope_type",
+          "scope_id"
+        ],
+        "title": "Scope"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "ServiceBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "P0 test issuer signature; aud/role/sub/expiry plus trusted scope claims"
+      }
+    }
+  },
+  "security": [
+    {
+      "ServiceBearer": []
+    }
+  ]
+}

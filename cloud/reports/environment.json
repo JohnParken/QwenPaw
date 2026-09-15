@@ -1,0 +1,27 @@
+{
+  "python": "3.12.11",
+  "os": "macOS-26.6.2-arm64-arm-64bit",
+  "arch": "arm64",
+  "runtime_identity": {
+    "kind": "local_bundle",
+    "commit": "2b09de79c37735b75c65c839705869d9ed040f45",
+    "dirty_diff_digest": "60a38c20a9824857abbe0a34f2463ad3f9d8b6fa21c1361939024a5673e928dd",
+    "dependency_lock_digest": "978db343c567ffb9eebb5a2a10106d5af80419733708c95d30d73a009915b524",
+    "python": "3.12.11",
+    "arch": "arm64"
+  },
+  "postgresql": "17.6",
+  "postgresql_source_sha256": "e0630a3600aea27511715563259ec2111cd5f4353a4b040e0be827f94cd7a8b0",
+  "dependency_lock": "cloud/requirements.lock",
+  "installed_dependency_count": 255,
+  "uv_pip_check": "255 packages compatible",
+  "sandbox": "native Seatbelt, mandatory for native executor",
+  "upstream_regression": {
+    "passed": 34,
+    "junit": "/private/tmp/qwenpaw-p0-regression/junit.xml"
+  },
+  "reme_ai": "0.4.1.11",
+  "agentscope": "2.0.7.post1",
+  "uv": "0.10.2",
+  "test_postgres_state": "stopped after acceptance; test data retained"
+}

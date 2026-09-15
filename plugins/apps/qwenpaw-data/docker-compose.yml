@@ -103,7 +103,7 @@ services:
   qwenpaw:
     build:
       context: ../../..
-      dockerfile: deploy/Dockerfile
+      dockerfile: deploy/Dockerfile.web
     container_name: qwenpaw-data-qwenpaw
     environment:
       QWENPAW_PORT: "${QWENPAW_PORT:-8088}"

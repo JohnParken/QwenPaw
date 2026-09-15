@@ -28,6 +28,7 @@ def test_custom_provider_protocols_match_discovery_policies() -> None:
         "OpenAIChatModel",
         "OpenAIResponseModel",
         "AnthropicChatModel",
+        "TLChatModel",
     }
     assert set(CUSTOM_DISCOVERY_POLICIES) == CUSTOM_CHAT_MODEL_NAMES
 

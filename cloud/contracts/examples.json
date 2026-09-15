@@ -1,0 +1,54 @@
+{
+  "protocol": "p0.v1",
+  "scope": {
+    "tenant_id": "t1",
+    "owner_user_id": "u1",
+    "scope_type": "standalone",
+    "scope_id": "s1"
+  },
+  "input": {
+    "marker": "s1-private-marker"
+  },
+  "upload": {
+    "upload_id": "example-input",
+    "scope": {
+      "tenant_id": "t1",
+      "owner_user_id": "u1",
+      "scope_type": "standalone",
+      "scope_id": "s1"
+    },
+    "content_base64": "eyJtYXJrZXIiOiJzMS1wcml2YXRlLW1hcmtlciJ9"
+  },
+  "ready_file_response": {
+    "ref": {
+      "file_id": "example-input",
+      "version": 1,
+      "sha256": "9e333d53db2926138e74276d711d96ab40e2423cc32356b91f46f1a010b880ac",
+      "size": 30
+    },
+    "status": "READY"
+  },
+  "claim": {
+    "request_id": "claim-example-01"
+  },
+  "timing": {
+    "heartbeat_seconds": 1,
+    "lease_seconds": 12,
+    "safety_seconds": 3,
+    "request_timeout": 2,
+    "stop_grace": 1,
+    "output_bytes": 65536,
+    "file_bytes": 1048576,
+    "segment_seconds": 60,
+    "test_seconds": 180,
+    "retries": 2
+  },
+  "errors": {
+    "401": "INVALID_SERVICE_IDENTITY",
+    "403": "SCOPE_FORBIDDEN",
+    "409": "STALE_ATTEMPT",
+    "413": "BODY_TOO_LARGE",
+    "426": "PROTOCOL_VERSION_REQUIRED"
+  },
+  "identity_encoding": "lease_epoch/revision: bounded JSON safe integer; timestamps: UTC RFC3339; file sha256: lower-case hex"
+}

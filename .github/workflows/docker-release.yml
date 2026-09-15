@@ -8,8 +8,8 @@ name: Docker Build and Push on Release
 on:
   # NOTE: legacy fallback path. The standard release flow is now release.yml
   # (see RELEASING.md). Publishing a GitHub Release directly still triggers this
-  # OLD publish, which is NOT gated on the desktop build. Kept only as an
-  # emergency rollback until the old release workflows are removed.
+  # legacy publish path. Kept only as an emergency rollback until the old
+  # release workflows are removed.
   release:
     types: [published]
   workflow_dispatch:
@@ -103,7 +103,7 @@ jobs:
             TAGS="${TAGS} -t ${ACR_REGISTRY}/${IMAGE}:latest -t docker.io/${IMAGE}:latest"
           fi
           docker buildx build --platform linux/amd64,linux/arm64 \
-            -f deploy/Dockerfile \
+            -f deploy/Dockerfile.web \
             --build-arg QWENPAW_DISABLED_CHANNELS="${QWENPAW_DISABLED_CHANNELS}" \
             --build-arg \
             QWENPAW_MANAGED_RUNTIME_BOUNDARY_VERSION="${QWENPAW_VERSION}" \

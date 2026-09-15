@@ -1,14 +1,8 @@
 /**
- * openHtmlFile renders raw HTML previews across three shells:
- * pywebview (legacy desktop), Tauri (desktop), and blob URL (browser).
- * The workspace-backed flag decides whether native openers are used;
- * blob fallback must always carry the content.
+ * openHtmlFile renders raw HTML previews through the legacy pywebview bridge
+ * when available, or a blob URL in the browser.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(() => Promise.resolve(undefined)),
-}));
 
 vi.mock("../api/authHeaders", () => ({
   buildAuthHeaders: () => ({ Authorization: "Bearer test" }),
@@ -22,18 +16,12 @@ vi.mock("../api/modules/workspace", () => ({
   },
 }));
 
-const mockIsDesktopTauriRuntime = vi.fn(() => false);
-vi.mock("./openExternalLink", () => ({
-  isDesktopTauriRuntime: () => mockIsDesktopTauriRuntime(),
-}));
-
 const mockGetPyWebViewApi = vi.fn(() => undefined);
 vi.mock("./pywebview", () => ({
   getPyWebViewApi: () => mockGetPyWebViewApi(),
 }));
 
 import { openHtmlFile } from "./openHtmlFile";
-import { invoke } from "@tauri-apps/api/core";
 import { workspaceApi } from "../api/modules/workspace";
 
 const baseOptions = {
@@ -53,7 +41,6 @@ describe("openHtmlFile", () => {
     URL.revokeObjectURL = vi.fn();
     // jsdom's window.open is a no-op stub; spy on it to observe navigation
     openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
-    mockIsDesktopTauriRuntime.mockReturnValue(false);
     mockGetPyWebViewApi.mockReturnValue(undefined);
   });
 
@@ -108,16 +95,6 @@ describe("openHtmlFile", () => {
     const headers = call[1] as Record<string, string>;
     expect(headers["X-Session-Project-Dir"]).toBe("/data/proj");
     expect(headers).not.toHaveProperty("X-Chat-Id");
-  });
-
-  it("uses the Tauri invoke when workspace backed in a tauri runtime", () => {
-    mockIsDesktopTauriRuntime.mockReturnValue(true);
-    openHtmlFile({ ...baseOptions, workspaceBacked: true });
-    expect(invoke).toHaveBeenCalledWith("open_workspace_html", {
-      url: "/api/html?path=report.html&root=project",
-      headers: expect.objectContaining({ Authorization: "Bearer test" }),
-    });
-    expect(URL.createObjectURL).not.toHaveBeenCalled();
   });
 
   it("honors the workspace root option", () => {

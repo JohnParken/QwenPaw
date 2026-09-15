@@ -10,7 +10,6 @@ import { Modal } from "antd";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { MarketPluginEntry } from "@/api/modules/pluginMarket";
-import { invoke, isTauri } from "@/test/tauri-mock";
 import { AppMarket } from "./AppMarket";
 
 const hoisted = vi.hoisted(() => ({
@@ -100,12 +99,8 @@ describe("AppMarket", () => {
     hoisted.fetchMarketPlugins.mockReset();
     hoisted.installPlugin.mockReset();
     hoisted.getVersion.mockReset();
-    invoke.mockReset();
-    invoke.mockResolvedValue(undefined);
-    isTauri.mockReturnValue(false);
     windowOpen.mockReset();
     vi.spyOn(window, "open").mockImplementation(windowOpen);
-    delete (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
     hoisted.fetchMarketPlugins.mockResolvedValue({ plugins: [], total: 0 });
     hoisted.getVersion.mockResolvedValue({ version: "2.1.0" });
   });
@@ -634,7 +629,6 @@ describe("AppMarket", () => {
     fireEvent.click(await screen.findByText("appCenter.details"));
 
     expect(windowOpen).not.toHaveBeenCalled();
-    expect(invoke).not.toHaveBeenCalled();
   });
 
   it("shows the market error inside the market view", async () => {

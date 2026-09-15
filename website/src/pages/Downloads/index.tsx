@@ -2,25 +2,11 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useSiteConfig } from "@/config-context";
-import { CDN_BASE, PLATFORM_ICONS } from "./constants";
-import { DownloadCard } from "./components/DownloadCard";
-import {
-  DOWNLOADS_PANEL_IDS,
-  DOWNLOADS_TAB_IDS,
-  DownloadsHeader,
-  type DownloadsTab,
-} from "./components/DownloadsHeader";
+import { CDN_BASE } from "./constants";
+import { DownloadsHeader } from "./components/DownloadsHeader";
 import { PluginsSection } from "./components/PluginsSection";
-import { PlatformGrid, ProductSection } from "./components/ProductSection";
-import type { DesktopIndex, FileMetadata, MainIndex } from "./types";
-import {
-  compareVersionDesc,
-  detectOS,
-  isRecommendedDesktopPlatform,
-  isPreviewVersion,
-  normalizeDesktopDownloadMetadata,
-  orderVersionsWithDefault,
-} from "./utils";
+import { ProductSection } from "./components/ProductSection";
+import type { MainIndex, ProductIndex } from "./types";
 
 const OTHER_METHODS = [
   {
@@ -54,7 +40,7 @@ const OTHER_METHODS = [
 
 async function fetchProductIndex(
   indexUrl: string,
-): Promise<DesktopIndex | null> {
+): Promise<ProductIndex | null> {
   const response = await fetch(`${CDN_BASE}${indexUrl}`);
   if (!response.ok) {
     console.warn("Product index fetch failed:", response.status, indexUrl);
@@ -69,14 +55,7 @@ export default function Downloads() {
   const { docsPath } = useSiteConfig();
   const [loading, setLoading] = useState(true);
   const [isEmpty, setIsEmpty] = useState(false);
-  const [desktopIndex, setDesktopIndex] = useState<DesktopIndex | null>(null);
-  const [pluginsIndex, setPluginsIndex] = useState<DesktopIndex | null>(null);
-  const [activeTab, setActiveTab] = useState<DownloadsTab>("desktop");
-  const userOS = detectOS();
-
-  const hasDesktop =
-    Boolean(desktopIndex) &&
-    Object.keys(desktopIndex?.platforms ?? {}).length > 0;
+  const [pluginsIndex, setPluginsIndex] = useState<ProductIndex | null>(null);
   const hasPlugins =
     Boolean(pluginsIndex) && Object.keys(pluginsIndex?.files ?? {}).length > 0;
   const docsBase = docsPath.replace(/\/$/, "") || "/docs";
@@ -104,27 +83,18 @@ export default function Downloads() {
         }
 
         const mainIndex: MainIndex = await mainIndexResponse.json();
-        const [desktopData, pluginsData] = await Promise.all([
-          mainIndex.products?.desktop
-            ? fetchProductIndex(mainIndex.products.desktop.index_url)
-            : Promise.resolve(null),
-          mainIndex.products?.plugins
-            ? fetchProductIndex(mainIndex.products.plugins.index_url)
-            : Promise.resolve(null),
-        ]);
+        const pluginsData = mainIndex.products?.plugins
+          ? await fetchProductIndex(mainIndex.products.plugins.index_url)
+          : null;
         if (cancelled) return;
 
-        if (desktopData) setDesktopIndex(desktopData);
         if (pluginsData) setPluginsIndex(pluginsData);
 
-        const hasDesktopData = Boolean(desktopData);
         const hasPluginsData = Object.keys(pluginsData?.files ?? {}).length > 0;
 
-        if (!hasDesktopData && !hasPluginsData) {
+        if (!hasPluginsData) {
           console.warn("No downloadable data available, showing empty state");
           setIsEmpty(true);
-        } else if (!hasDesktopData && hasPluginsData) {
-          setActiveTab("plugins");
         }
 
         setLoading(false);
@@ -143,45 +113,11 @@ export default function Downloads() {
     };
   }, []);
 
-  const showDesktopPanel =
-    hasDesktop && (activeTab === "desktop" || !hasPlugins);
-  const showPluginsPanel =
-    hasPlugins && (activeTab === "plugins" || !hasDesktop);
-  const desktopPlatforms = Object.keys(desktopIndex?.platforms ?? {});
-  const sortedDesktopPlatforms = Object.fromEntries(
-    Object.entries(desktopIndex?.platforms ?? {})
-      .filter(([platform]) => platform.endsWith("-tauri"))
-      .sort(([platformA], [platformB]) => {
-        const aIsRecommended = isRecommendedDesktopPlatform(
-          platformA,
-          userOS,
-          desktopPlatforms,
-        );
-        const bIsRecommended = isRecommendedDesktopPlatform(
-          platformB,
-          userOS,
-          desktopPlatforms,
-        );
-        if (aIsRecommended !== bIsRecommended) return aIsRecommended ? -1 : 1;
-
-        const aIsTauri = platformA.endsWith("-tauri");
-        const bIsTauri = platformB.endsWith("-tauri");
-        if (aIsTauri !== bIsTauri) return aIsTauri ? -1 : 1;
-
-        return 0;
-      }),
-  ) as DesktopIndex["platforms"];
-
   return (
     <div className="flex min-h-screen flex-col">
       <div className="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-6 lg:p-8">
         {!loading && !isEmpty && (
-          <DownloadsHeader
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            showDesktopTab={hasDesktop}
-            showPluginsTab={hasPlugins}
-          />
+          <DownloadsHeader />
         )}
 
         {(loading || isEmpty) && (
@@ -226,67 +162,8 @@ export default function Downloads() {
 
         {!loading && !isEmpty && (
           <section className="mb-16">
-            {showDesktopPanel && desktopIndex && (
-              <div
-                id={DOWNLOADS_PANEL_IDS.desktop}
-                role="tabpanel"
-                aria-labelledby={DOWNLOADS_TAB_IDS.desktop}
-              >
-                <ProductSection
-                  title={t("downloads.desktopTitle")}
-                  description={t("downloads.desktopDesc")}
-                  className="mb-12"
-                >
-                  <PlatformGrid>
-                    {Object.entries(sortedDesktopPlatforms).map(
-                      ([platform, platformData]) => {
-                        const platformVersions = (platformData.versions || [])
-                          .map((fileId) => desktopIndex.files[fileId])
-                          .filter((item): item is FileMetadata => Boolean(item))
-                          .map(normalizeDesktopDownloadMetadata)
-                          .sort((a, b) =>
-                            compareVersionDesc(a.version, b.version),
-                          );
-
-                        if (platformVersions.length === 0) return null;
-
-                        const latestStable = platformVersions.find(
-                          (item) => !isPreviewVersion(item.version),
-                        );
-
-                        return (
-                          <DownloadCard
-                            key={platform}
-                            versions={orderVersionsWithDefault(
-                              platformVersions,
-                              latestStable?.id,
-                            )}
-                            latestStableFileId={latestStable?.id ?? null}
-                            icon={
-                              PLATFORM_ICONS[platform] ?? PLATFORM_ICONS.win
-                            }
-                            isRecommended={isRecommendedDesktopPlatform(
-                              platform,
-                              userOS,
-                              desktopPlatforms,
-                            )}
-                          />
-                        );
-                      },
-                    )}
-                  </PlatformGrid>
-                </ProductSection>
-              </div>
-            )}
-
-            {showPluginsPanel && pluginsIndex && (
-              <div
-                id={DOWNLOADS_PANEL_IDS.plugins}
-                role="tabpanel"
-                aria-labelledby={DOWNLOADS_TAB_IDS.plugins}
-              >
-                <PluginsSection pluginsIndex={pluginsIndex} />
-              </div>
+            {hasPlugins && pluginsIndex && (
+              <PluginsSection pluginsIndex={pluginsIndex} />
             )}
 
             <ProductSection

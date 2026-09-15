@@ -143,6 +143,7 @@ async def _capture_macos_screencapture(
     requires_sandbox=("file_write",),
     async_execution=True,
     tool_type="file",
+    enabled_by_default=False,
     target_param="path",
     policy_name="DesktopScreenshot",
     ui_description="Capture desktop screenshots",

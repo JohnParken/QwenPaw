@@ -68,8 +68,4 @@ fi
 export QWENPAW_PORT="${QWENPAW_PORT:-8088}"
 warn_if_auth_off_container_bind
 
-envsubst '${QWENPAW_PORT}' \
-  < /etc/supervisor/conf.d/supervisord.conf.template \
-  > /etc/supervisor/conf.d/supervisord.conf
-
-exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
+exec qwenpaw app --host 0.0.0.0 --port "${QWENPAW_PORT}"

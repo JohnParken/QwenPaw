@@ -1,3 +1,6 @@
+> 本分支默认面向云端 Runner / PC Web。安装分组、精简镜像及保留能力见
+> [云端部署与精简说明](docs/design/Cloud_Web_Slimming.md)。
+
 <div align="center">
 
 # QwenPaw
@@ -39,7 +42,7 @@
 | **多智能体与并行**                        | 创建拥有独立记忆与技能的 Agent；运行时生成子 Agent；通过 Agent Communication Protocol（ACP）实现跨系统编排。                                                                         |
 | **通用文件工作区**                    | 在项目文件与 Agent 文件中统一提供文件导航、预览、编辑、Diff、上传和下载。                                                                                                           |
 | **能力扩展**                        | Skills 覆盖定时任务、文档、浏览器、新闻等。插件架构带 Plugin Market。MCP 集成外部工具。自由组合成面向场景的工作流。                                                                    |
-| **随处可达**                        | 钉钉、飞书、微信、Discord、Telegram、iMessage、QQ — 一个实例，全频道连接。Console、TUI 与桌面应用可直接访问。                                                                         |
+| **随处可达**                        | 钉钉、飞书、微信、Discord、Telegram、iMessage、QQ — 一个实例，全频道连接。Console 与 TUI 可直接访问。                                                                         |
 | **你的，不是我们的**                      | 本地部署，数据留在你的机器，无第三方托管，无数据上传。                                                                                                         |
 
 <details>
@@ -282,49 +285,6 @@ docker run -p 127.0.0.1:8088:8088 \
 
 ---
 
-### 方式七：桌面应用（Beta）
-
-> **Beta 版本说明**：桌面应用目前处于 Beta 测试阶段，存在以下已知限制：
-> - **兼容性测试不完整**：未在所有系统版本和硬件配置上进行充分测试
-> - **性能可能存在缺陷**：启动速度、内存占用等方面可能需要进一步优化
-> - **功能持续完善中**：部分功能可能不稳定或缺失
-
-如果你不习惯使用命令行，可以下载并使用 QwenPaw 的桌面应用版本，无需手动配置 Python 环境或执行命令。
-
-#### 下载
-
-从 [官方下载页](https://qwenpaw.agentscope.io/downloads) 下载桌面应用（Tauri 版）：
-- **Windows**：`QwenPaw-Tauri-<version>-Windows-setup.exe`
-- **macOS**：`QwenPaw-Tauri-<version>-macOS.zip`（推荐 Apple Silicon）
-
-#### 特点
-
-- ✅ **零配置**：下载后双击即可运行，无需安装 Python 或配置环境变量
-- ✅ **跨平台**：支持 Windows 10+ 和 macOS 14+
-- ✅ **可视化**：自动打开应用界面，无需手动输入地址
-- ⚠️ **Beta 阶段**：功能持续完善中，欢迎反馈问题
-
-#### 首次启动
-
-**重要提示**：首次启动可能需要 10-60 秒（取决于您的系统配置）。应用需要初始化 Python 环境和加载依赖，请耐心等待窗口自动打开。
-
-#### macOS：绕过系统安全限制
-
-当你从 Releases 下载 QwenPaw macOS 应用时，macOS 可能显示：*"Apple 无法验证 'QwenPaw' 不包含恶意软件"*。这是因为应用未经过公证。你仍然可以通过以下方式打开：
-
-- **右键打开（推荐）**
-  右键点击（或 Control + 点击）QwenPaw 应用 → **「打开」** → 在对话框中再次点击 **「打开」**。这会告诉 Gatekeeper 你信任该应用；之后可以像往常一样双击启动。
-
-- **在系统设置中允许**
-  如果仍被阻止，进入 **系统设置 → 隐私与安全性**，向下滚动找到类似 *「已阻止 'QwenPaw'，因为无法验证开发者」* 的提示，点击 **「仍要打开」** 或 **「允许」**。
-
-- **移除隔离属性（不推荐大多数用户）**
-  在终端运行：
-  `xattr -cr "/Applications/QwenPaw Desktop.app"`
-  （或使用解压后的 `.app` 路径）。这会清除「从互联网下载」的隔离标志，使警告通常不会出现，但不如使用 **右键 → 打开** 安全和可控。
-
-详细使用说明、故障排除和常见问题，请参见 [桌面应用指南](https://qwenpaw.agentscope.io/docs/desktop)。
-
 ---
 
 ### 下一步？
@@ -404,7 +364,6 @@ QwenPaw 内置五层核心安全防护：
 | [快速开始](https://qwenpaw.agentscope.io/docs/quickstart)            | 安装与运行（本地或魔搭创空间）                   |
 | [控制台](https://qwenpaw.agentscope.io/docs/console)                 | Web 界面：对话与智能体配置                       |
 | [终端界面（TUI）](https://qwenpaw.agentscope.io/docs/tui)            | 终端全屏对话，与控制台共用同一智能体             |
-| [桌面应用](https://qwenpaw.agentscope.io/docs/desktop)               | 桌面应用安装与使用                               |
 | [模型](https://qwenpaw.agentscope.io/docs/models)                    | 配置云端、本地与自定义提供商                     |
 | [频道配置](https://qwenpaw.agentscope.io/docs/channels)              | 钉钉、飞书、QQ、Discord、iMessage 等             |
 | [Skills](https://qwenpaw.agentscope.io/docs/skills)                  | 扩展与自定义能力                                 |
@@ -443,7 +402,7 @@ QwenPaw 内置五层核心安全防护：
 | 方向                     | 事项                                      | 状态   |
 | ------------------------ | ----------------------------------------- | ------ |
 | **横向拓展**             | 更多频道、模型、技能、MCP                 | 征集中 |
-| **已有功能扩展与完善**   | 展示、下载与 Windows 兼容优化             | 征集中 |
+| **已有功能扩展与完善**   | Console 展示与交互优化                    | 征集中 |
 | **模型**                 | 多模型切换                                | 进行中 |
 | **安全与审批**           | 批量预览与批准                            | 进行中 |
 | **自动化**               | 自动化任务                                | 进行中 |
@@ -453,7 +412,6 @@ QwenPaw 内置五层核心安全防护：
 | **上下文**               | 系统提示压缩                              | 进行中 |
 | **工具系统**             | 多位置文件修改                            | 进行中 |
 |                          | 持久终端与后台任务                        | 进行中 |
-| **Computer-use**         | 屏幕目标定位与操作                        | 进行中 |
 | **语音交互**             | 实时语音任务                              | 进行中 |
 | **上下文管理与记忆**     | 向量模型与存储热切换                      | 进行中 |
 |                          | 个人知识库                                | 进行中 |
@@ -537,7 +495,7 @@ QwenPaw 在执行 `qwenpaw init` 时会收集**匿名**使用数据，帮助我�
 **收集的信息：**
 
 - QwenPaw 版本（如 1.1.12）
-- 安装方式（pip、Docker 或桌面应用）
+- 安装方式（pip、脚本、Docker 或云端部署）
 - 操作系统及版本（如 macOS 14.0、Ubuntu 22.04）
 - Python 版本（如 3.13）
 - CPU 架构（如 x86_64、arm64）

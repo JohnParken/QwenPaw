@@ -107,8 +107,6 @@ docker run -p 127.0.0.1:8088:8088 \
   agentscope/qwenpaw:latest
 ```
 
-5. If using the Desktop app (Tauri build), it ships with a built-in in-app updater: on startup it automatically checks for new versions and prompts you in the UI, where you can choose "Install and Restart" to update now or "Update Later" to download in the background. You can also grab the latest build manually from the download page: https://qwenpaw.agentscope.io/downloads
-
 After upgrading, restart the service with `qwenpaw app`.
 
 If you previously used CoPaw, upgrading to QwenPaw only requires downloading the latest QwenPaw. No extra migration is needed; your configuration, memory, skills, and other data from the CoPaw era continue to work.
@@ -135,7 +133,7 @@ open Console and customize settings. See
 
 On Windows, Hyper-V and WSL2 may reserve certain port ranges, which can conflict
 with QwenPaw's default port **8088**. This affects all installation methods
-(pip, script, Docker, desktop app).
+(pip, script, Docker).
 
 **Symptoms:**
 
@@ -174,15 +172,6 @@ docker run -p 127.0.0.1:8090:8088 \
 ```
 
 Then open `http://127.0.0.1:8090/` in your browser.
-
-**For Windows Desktop App:**
-
-Currently, the desktop app uses port 8088 by default. If you encounter this
-issue, you can:
-
-1. Run `qwenpaw app --port 8090` from a terminal instead
-2. Or exclude port 8088 from Windows reserved ranges (requires administrator
-   privileges and may affect other services)
 
 **Advanced: Prevent Windows from reserving port 8088**
 

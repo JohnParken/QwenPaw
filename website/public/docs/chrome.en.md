@@ -204,5 +204,4 @@ browsers, use the standalone browser — see [Browser](./browser).
 
 - [Browser](./browser) — browser identity, settings, and the standalone browser
 - [Plugin system](./plugins) — installing and managing plugins
-- [Desktop app](./desktop) — install, launch, and desktop troubleshooting
 - [Security](./security) — access control and tokens

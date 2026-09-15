@@ -82,7 +82,7 @@ jobs:
           # non-version edits to plugin.json idempotent.
           #
           # Read the authoritative index straight from OSS, matching
-          # release.yml / plugins-release.yml / desktop-promote.yml. The
+          # release.yml / plugins-release.yml. The
           # public CDN is NOT trustworthy here: overseas edges were observed
           # serving gzip bodies without content negotiation and intermittent
           # 403s on origin pulls, both of which broke this check on

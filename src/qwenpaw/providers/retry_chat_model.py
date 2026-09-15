@@ -54,6 +54,7 @@ from .model_error_policy import (
 )
 from .rate_limiter import LLMRateLimiter, get_rate_limiter
 from .stream_progress import has_meaningful_stream_content
+from .tl_utils import is_tl_model
 
 logger = logging.getLogger(__name__)
 
@@ -249,6 +250,8 @@ def _enable_reasoning_content_fallback(
     may have enabled it after this request was formatted but before its 400
     was handled, and that in-flight request still needs one retry.
     """
+    if is_tl_model(model):
+        return False
     if _inject_reasoning_content(args, kwargs):
         return True
 
@@ -439,6 +442,12 @@ class RetryChatModel(ChatModelBase):
         provider_id = getattr(self._inner, "_provider_id", None)
         name = self._inner.model
         return f"{provider_id}:{name}" if provider_id else name
+
+    async def count_tokens(self, messages, tools=None):
+        """Count the compiled TL prompt through transparent wrappers."""
+        if is_tl_model(self._inner):
+            return await self._inner.count_tokens(messages, tools)
+        return await super().count_tokens(messages, tools)
 
     def _track_provider_cleanup(
         self,

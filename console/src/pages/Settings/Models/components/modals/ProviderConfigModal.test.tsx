@@ -53,6 +53,7 @@ vi.mock("@agentscope-ai/design", async (importOriginal) => {
     ...original,
     Form: antd.Form,
     Input: antd.Input,
+    InputNumber: antd.InputNumber,
     Select: antd.Select,
     Radio: antd.Radio,
     Modal: Object.assign(modalLike, {
@@ -202,6 +203,58 @@ describe("ProviderConfigModal", () => {
       renderModal(makeProvider({ freeze_url: true }));
       const input = screen.getByDisplayValue("https://api.example.com/v1");
       expect(input).toBeDisabled();
+    });
+  });
+
+  describe("TL configuration", () => {
+    it("tests current metadata without saving and retains the initialization-only result", async () => {
+      const user = userEvent.setup();
+      renderModal(makeProvider({ chat_model: "TLChatModel" }));
+      const input = screen.getByLabelText("models.tlAppId");
+      await user.clear(input);
+      await user.type(input, "unsaved-app");
+      apiMocks.testProviderConnection.mockResolvedValue({
+        success: true,
+        verification: "provider_only",
+        message: "Session initialized; chat not tested.",
+      });
+      await user.click(screen.getByText("models.testConnection"));
+      await waitFor(() =>
+        expect(apiMocks.testProviderConnection).toHaveBeenCalled(),
+      );
+      expect(apiMocks.testProviderConnection).toHaveBeenCalledWith(
+        "custom-provider",
+        expect.objectContaining({
+          chat_model: "TLChatModel",
+          tl_config: expect.objectContaining({ app_id: "unsaved-app" }),
+        }),
+      );
+      expect(apiMocks.configureProvider).not.toHaveBeenCalled();
+      expect(messageMocks.success).toHaveBeenCalledWith(
+        "models.testProviderInitializationSuccess",
+      );
+    });
+
+    it("rejects invalid nested settings before a connection test", async () => {
+      const user = userEvent.setup();
+      renderModal(makeProvider({ chat_model: "TLChatModel" }));
+      await user.clear(screen.getByLabelText("models.tlSystemPromptVariable"));
+      await user.click(screen.getByText("models.testConnection"));
+      await waitFor(() =>
+        expect(
+          screen.getByLabelText("models.tlSystemPromptVariable"),
+        ).toHaveAttribute("aria-invalid", "true"),
+      );
+      expect(apiMocks.testProviderConnection).not.toHaveBeenCalled();
+    });
+
+    it("keeps the protocol fixed and hides generation overrides", () => {
+      renderModal(makeProvider({ chat_model: "TLChatModel" }));
+      expect(screen.getByRole("combobox")).toBeDisabled();
+      fireEvent.click(screen.getByText("models.advancedConfig"));
+      expect(
+        screen.queryByText("models.generateConfig"),
+      ).not.toBeInTheDocument();
     });
   });
 

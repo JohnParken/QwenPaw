@@ -45,18 +45,6 @@
     "chatGptAuthenticated": "ChatGPT に接続済み",
     "cliAuthenticated": "{{type}} CLI 認証済み"
   },
-  "desktop": {
-    "closeWindow": {
-      "title": "ウィンドウを閉じる",
-      "description": "ウィンドウを閉じるときに実行する操作を選択してください。アプリを終了すると、実行中のすべてのタスクとスケジュール済みタスクが停止します。",
-      "remember": "選択を記憶する",
-      "showWindow": "ウィンドウを表示",
-      "minimizeToTray": "トレイに最小化",
-      "quitApp": "アプリを終了",
-      "preference": "ウィンドウを閉じる",
-      "askEveryTime": "毎回確認する"
-    }
-  },
   "chunkError": {
     "title": "ページの読み込みに失敗しました",
     "subTitle": "ネットワークの問題またはアプリの更新が原因の可能性があります。",
@@ -2695,34 +2683,7 @@
     "newVersion": "新しいバージョンが利用可能です: v{{version}}、クリックしてアップグレード",
     "updateModal": {
       "title": "新しいバージョンが利用可能です: v{{version}}",
-      "viewReleases": "リリースを見る",
-      "installDesktopUpdate": "今すぐ更新",
-      "desktopInstallHint": "QwenPaw Desktop {{version}} のインストール準備が整いました。更新後にアプリが再起動します。",
-      "checking": "更新を確認中…",
-      "checkingHint": "最新バージョンを確認しています",
-      "downloading": "更新をダウンロード中",
-      "downloadingTo": "バージョン {{version}} に更新中",
-      "downloadProgress": "{{done}} / {{total}} · {{rate}}",
-      "installing": "更新をインストール中",
-      "willRestart": "アプリはインストール完了後に自動的に再起動します",
-      "stepPrepare": "準備",
-      "stepDownloading": "ダウンロード",
-      "stepInstalling": "インストール",
-      "failedTitle": "更新に失敗しました",
-      "back": "戻る",
-      "retry": "再試行",
-      "errors": {
-        "network": "更新サーバーに接続できませんでした。インターネット接続を確認して再試行してください。",
-        "signature": "更新ファイルの署名検証に失敗しました。もう一度ダウンロードしてください。",
-        "appLocation": "QwenPaw は読み取り専用の macOS の場所から実行されています。QwenPaw.app を Applications フォルダーへ移動し、そこから起動してからもう一度更新してください。",
-        "other": "更新に失敗しました。"
-      },
-      "updateLater": "バックグラウンドでダウンロード",
-      "backgroundDownloading": "バックグラウンドでダウンロード中…",
-      "readyToInstall": "更新の準備が完了",
-      "readyToInstallHint": "v{{version}} の更新をダウンロードしました。再起動してインストールし、新しいバージョンを起動します。",
-      "restartNow": "今すぐ更新",
-      "backgroundFailed": "バックグラウンドダウンロード失敗"
+      "viewReleases": "リリースを見る"
     },
     "settings": {
       "language": "言語",
@@ -2773,7 +2734,6 @@
       "extension": "拡張機能が提供する設定"
     },
     "appearanceAndLanguage": "外観と言語",
-    "desktopApplication": "デスクトップアプリ",
     "languageHint": "このデバイスの表示言語を変更します。",
     "themeHint": "ライト、ダーク、またはシステムに合わせた外観を使用します。",
     "contentWidth": "メッセージ幅",
@@ -2792,7 +2752,6 @@
     "displayExpanded": "すべて展開",
     "displayProcessCollapsed": "プロセスを折りたたむ",
     "displayResultCollapsed": "結果を折りたたむ",
-    "closeBehaviorHint": "デスクトップウィンドウを閉じたときの動作を選択します。",
     "desktopModeHint": "マルチウィンドウのデスクトップワークスペースを開きます。",
     "open": "開く",
     "fixedEntries": "固定項目",

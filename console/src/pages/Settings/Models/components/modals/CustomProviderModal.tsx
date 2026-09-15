@@ -3,6 +3,8 @@ import { Form, Input, Modal, Select } from "@agentscope-ai/design";
 import api from "../../../../../api";
 import { useTranslation } from "react-i18next";
 import { useAppMessage } from "../../../../../hooks/useAppMessage";
+import { DEFAULT_TL_CONFIG } from "../../../../../api/types";
+import { TLConfigFields } from "./TLConfigFields";
 
 interface CustomProviderModalProps {
   open: boolean;
@@ -19,6 +21,7 @@ export function CustomProviderModal({
   const { message } = useAppMessage();
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
+  const selectedChatModel = Form.useWatch("chat_model", form);
 
   useEffect(() => {
     if (open) {
@@ -36,6 +39,8 @@ export function CustomProviderModal({
         default_base_url: values.default_base_url?.trim() || "",
         api_key_prefix: values.api_key_prefix?.trim() || "",
         chat_model: values.chat_model || "OpenAIChatModel",
+        tl_config:
+          values.chat_model === "TLChatModel" ? values.tl_config : undefined,
       });
       message.success(
         t("models.providerCreated", { name: values.name.trim() }),
@@ -126,9 +131,13 @@ export function CustomProviderModal({
                 value: "AnthropicChatModel",
                 label: t("models.protocolAnthropic"),
               },
+              { value: "TLChatModel", label: t("models.protocolTL") },
             ]}
           />
         </Form.Item>
+        {selectedChatModel === "TLChatModel" && (
+          <TLConfigFields defaults={DEFAULT_TL_CONFIG} />
+        )}
       </Form>
     </Modal>
   );

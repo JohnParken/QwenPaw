@@ -14,13 +14,6 @@ import { useTranslation } from "react-i18next";
 import { settingsApi } from "@/api/modules/language";
 import { LANGUAGE_LIST } from "@/constants/languageList";
 import { useTheme, type ThemeMode } from "@/contexts/ThemeContext";
-import { isTauriRuntime } from "@/tauri/backendRuntime";
-import {
-  clearRememberedCloseAction,
-  getRememberedCloseAction,
-  setRememberedCloseAction,
-  type CloseAction,
-} from "@/tauri/closeWindowPreference";
 import { getOsRootHref } from "@/utils/navigationMode";
 import {
   getChatWideModePreference,
@@ -38,7 +31,6 @@ import {
 } from "@/utils/chatDisplayPreference";
 import styles from "./index.module.less";
 
-type CloseBehavior = "ask" | CloseAction;
 type ContentWidth = "standard" | "wide";
 
 const LANGUAGES = LANGUAGE_LIST.map(({ key, label }) => ({
@@ -63,19 +55,10 @@ export default function GeneralSettings() {
   )
     ? rawLanguage
     : rawLanguage.split("-")[0];
-  const closeBehavior = isTauriRuntime()
-    ? getRememberedCloseAction() ?? "ask"
-    : "ask";
-
   const changeLanguage = (language: string) => {
     void i18n.changeLanguage(language);
     localStorage.setItem("language", language);
     void settingsApi.updateLanguage(language).catch(() => {});
-  };
-
-  const changeCloseBehavior = (value: CloseBehavior) => {
-    if (value === "ask") clearRememberedCloseAction();
-    else setRememberedCloseAction(value);
   };
 
   const changeContentWidth = (width: ContentWidth) => {
@@ -310,49 +293,6 @@ export default function GeneralSettings() {
           </div>
         </div>
       </section>
-
-      {isTauriRuntime() && (
-        <section className={styles.settingsSection}>
-          <h3 className={styles.sectionTitle}>
-            {t("settingsCenter.desktopApplication", "Desktop app")}
-          </h3>
-          <div className={styles.settingsCard}>
-            <div className={styles.settingRow}>
-              <span className={styles.settingIcon}>
-                <Monitor size={18} />
-              </span>
-              <span className={styles.settingCopy}>
-                <strong>{t("desktop.closeWindow.preference")}</strong>
-                <small>
-                  {t(
-                    "settingsCenter.closeBehaviorHint",
-                    "Choose what happens when the desktop window closes.",
-                  )}
-                </small>
-              </span>
-              <Select<CloseBehavior>
-                className={styles.settingControl}
-                defaultValue={closeBehavior}
-                onChange={changeCloseBehavior}
-                options={[
-                  {
-                    value: "ask",
-                    label: t("desktop.closeWindow.askEveryTime"),
-                  },
-                  {
-                    value: "minimize-to-tray",
-                    label: t("desktop.closeWindow.minimizeToTray"),
-                  },
-                  {
-                    value: "quit",
-                    label: t("desktop.closeWindow.quitApp"),
-                  },
-                ]}
-              />
-            </div>
-          </div>
-        </section>
-      )}
     </div>
   );
 }

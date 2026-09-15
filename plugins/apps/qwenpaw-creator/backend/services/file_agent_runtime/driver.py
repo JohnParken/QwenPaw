@@ -58,7 +58,6 @@ from models.config import (
     get_web_grounding_verification_timeout_seconds,
     get_web_grounding_visual_search_timeout_seconds,
     get_image_model_name,
-    get_computer_use_enabled,
     get_live_operation_enabled,
     get_live_operation_fps,
     get_live_operation_identity,
@@ -128,9 +127,7 @@ from services.media_files.live_operation import (
     PublishedTake,
     build_image_records,
     build_take_records,
-    computer_use_status,
     run_browser_code,
-    run_computer_use_code,
     read_take_manifest,
     stable_id,
     stage_and_publish_file,
@@ -308,7 +305,6 @@ _BILLING_SENSITIVE_ARGUMENTS = ("durationSeconds", "resolution", "mode")
 GROUND_PROMPT_CONTEXT_TOOL_NAME = "ground_prompt_context"
 OBJECT_GROUNDING_TOOL_NAME = "ground_image_objects"
 BROWSER_USE_TOOL_NAME = "browser_use"
-COMPUTER_USE_TOOL_NAME = "computer_use"
 GROUNDING_VISUAL_MAX_BYTES = 16 * 1024 * 1024
 MAX_MALFORMED_JQ_PROJECT_RETRIES = 2
 MAX_REPEATED_DETERMINISTIC_TOOL_FAILURES = 2
@@ -935,53 +931,6 @@ def _browser_use_tool_manifest() -> dict[str, Any]:
     }
 
 
-def _computer_use_tool_manifest() -> dict[str, Any]:
-    """Describe the desktop live-operation tool, symmetric to browser_use.
-
-    Kept short on purpose: the authoritative reference is the computer-use
-    skill, loaded on demand. Desktop control needs the desktop host runtime,
-    so the tool degrades with a clear message where that runtime is absent.
-    """
-    return {
-        "type": "function",
-        "function": {
-            "name": COMPUTER_USE_TOOL_NAME,
-            "description": (
-                "用异步 Python 真实操作桌面应用（复用宿主 Computer Use 原生运"
-                "行时），并可在需要时录制操作过程。作用域内有 `desktop`"
-                "（observe_window / list_windows / launch_app / click / "
-                "type_text / press_key / scroll / drag / invoke_element 等）"
-                "与 `recorder`（start/stop 屏录）。按 观察 → 行动 → 复核 "
-                "微环工作；await desktop.observe_window() 读窗口，再动作，"
-                "再 observe 确认。完整参考在 computer-use skill。录屏与截图"
-                "方法返回普通 dict/list（如 list_apps() 的 result['apps']，"
-                "每个 app 用 app['id']/app['display_name']），不是属性对象。"
-                "每次调用变量不保留，code 必须自包含地重新发现和 observe。"
-                "自动入库为 Project 源素材。桌面操作需要桌面宿主运行时；"
-                "不可用时工具会明确降级提示，此时改用截图配动效表达。\n\n"
-                "参数 code：模块级 async Python（可直接 await；用 print() 输出"
-                "你需要看到的事实）。"
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "projectId": {"type": "string", "minLength": 1},
-                    "code": {
-                        "type": "string",
-                        "minLength": 1,
-                        "description": (
-                            "模块级 async Python；`desktop` 与 `recorder` "
-                            "已在作用域内。"
-                        ),
-                    },
-                },
-                "required": ["projectId", "code"],
-                "additionalProperties": False,
-            },
-        },
-    }
-
-
 def _creator_agent_tool_manifest(
     external_skills: list[LoadedSkill] | None = None,
 ) -> list[dict[str, Any]]:
@@ -992,8 +941,6 @@ def _creator_agent_tool_manifest(
     manifest.append(_object_grounding_tool_manifest())
     if get_live_operation_enabled():
         manifest.append(_browser_use_tool_manifest())
-    if get_computer_use_enabled():
-        manifest.append(_computer_use_tool_manifest())
     if external_skills:
         manifest.extend(external_skill_tool_manifests(external_skills))
     voice_manifest = character_voice_tool_manifest()
@@ -3425,12 +3372,6 @@ class FileCreatorAgentRuntime:
                             run_id=run_id,
                             arguments=call.arguments,
                         )
-                    elif call.name == COMPUTER_USE_TOOL_NAME:
-                        result = await self._run_computer_use(
-                            request=request,
-                            run_id=run_id,
-                            arguments=call.arguments,
-                        )
                     elif call.name in EXTERNAL_SKILL_TOOL_NAMES:
                         result = await self._run_external_skill_tool(
                             name=call.name,
@@ -4294,78 +4235,6 @@ class FileCreatorAgentRuntime:
                 suffix=".png",
             )
         return response
-
-    async def _run_computer_use(
-        self,
-        *,
-        request: CreatorMessageRecord,
-        run_id: str,
-        arguments: Mapping[str, Any],
-    ) -> dict[str, Any]:
-        """Run the model's desktop code and publish whatever it recorded.
-
-        Symmetric to browser operation: this runs the model's own script, and
-        any footage or screenshots become ordinary Project source material via
-        the shared publish path. Where the desktop host runtime is absent the
-        run returns a clear degraded result instead of failing opaquely.
-        """
-        code = str(arguments.get("code") or "")
-        if not code.strip():
-            raise FileAgentRuntimeError("computer_use requires code")
-        if not get_computer_use_enabled():
-            raise FileAgentRuntimeError(
-                "computer_use is disabled in this Creator configuration",
-            )
-        project_id = request.project_id
-        run_root = self.services.projects.project_root(project_id) / "runtime"
-        operation_run_id = f"{run_id}-{uuid4().hex[:8]}"
-        try:
-            try:
-                outcome = await run_computer_use_code(
-                    code,
-                    run_root=run_root,
-                    run_id=operation_run_id,
-                    session_id=request.creator_session_id,
-                    fps=get_live_operation_fps(),
-                    max_take_seconds=get_live_operation_max_take_seconds(),
-                    timeout_seconds=get_live_operation_timeout_seconds(),
-                )
-            except LiveOperationError as exc:
-                raise FileAgentRuntimeError(
-                    f"computer_use failed: {exc}",
-                ) from exc
-            _require_actionable_takes(
-                outcome,
-                tool_name=COMPUTER_USE_TOOL_NAME,
-            )
-            published = await asyncio.to_thread(
-                self._publish_live_operation_sync,
-                project_id,
-                request.message_id,
-                operation_run_id,
-                outcome,
-            )
-            response: dict[str, Any] = {
-                "ok": True,
-                "status": "success",
-                "output": outcome.output,
-                "capability": computer_use_status(),
-                "takes": [item.as_dict() for item in published["takes"]],
-                "screenshots": [
-                    item.as_dict() for item in published["screenshots"]
-                ],
-            }
-            if outcome.result_repr:
-                response["result"] = outcome.result_repr
-            if published["issues"]:
-                response["issues"] = published["issues"]
-            return response
-        finally:
-            await asyncio.to_thread(
-                _remove_live_operation_scratch,
-                run_root,
-                operation_run_id,
-            )
 
     async def _run_browser_use(
         self,

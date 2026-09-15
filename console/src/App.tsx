@@ -26,8 +26,6 @@ import MainLayout from "./layouts/MainLayout";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { PluginProvider } from "./plugins/PluginContext";
 import { ApprovalProvider } from "./contexts/ApprovalContext";
-import { DesktopUpdateProvider } from "./contexts/DesktopUpdateContext";
-import { UpdateTakeoverGate } from "./components/UpdateTakeoverPage";
 import { Suspense, lazy } from "react";
 import { lazyImportWithRetry } from "./utils/lazyWithRetry";
 import {
@@ -45,8 +43,7 @@ const HubPage = lazyImportWithRetry("./pages/Hub/index");
 const DesktopOSPage = lazy(() => import("./os/DesktopOS"));
 import { languageApi } from "./api/modules/language";
 import { useUploadLimitStore } from "./stores/uploadLimitStore";
-import CloseWindowPrompt from "./tauri/CloseWindowPrompt";
-import BackendLoadingPage from "./tauri/BackendLoadingPage";
+import BackendLoadingPage from "./components/BackendLoadingPage";
 import {
   resolveAuthGate,
   resolveBackendInfo,
@@ -54,9 +51,6 @@ import {
 } from "./auth/gate";
 import type { AuthStatusResponse } from "./api/modules/auth";
 import { hubApi, type HubHealth } from "./api/modules/hub";
-import { isTauri } from "@tauri-apps/api/core";
-import { isDesktopTauriRuntime } from "./utils/openExternalLink";
-import { interceptBlankLinkClicks } from "./utils/interceptBlankLinkClicks";
 import "./styles/tokens.css";
 import "./styles/layout.css";
 import "./styles/form-override.css";
@@ -350,24 +344,6 @@ function AppInner({ backendInfo }: { backendInfo: BackendInfo }) {
     };
   }, [i18n]);
 
-  // Disable the default browser context menu in the Tauri desktop build so
-  // users cannot open DevTools via right-click. DevTools is still available
-  // through the hidden 8-click logo gesture handled in Header.tsx.
-  useEffect(() => {
-    if (!isTauri()) return;
-    const preventContextMenu = (e: MouseEvent) => e.preventDefault();
-    window.addEventListener("contextmenu", preventContextMenu);
-    return () => window.removeEventListener("contextmenu", preventContextMenu);
-  }, []);
-
-  // Vendor-rendered markdown (e.g. chat bubbles) emits native
-  // `<a target="_blank">` anchors we cannot override at the React level. The
-  // Tauri WebView ignores such clicks, so route them to the system browser.
-  useEffect(() => {
-    if (!isDesktopTauriRuntime()) return;
-    return interceptBlankLinkClicks();
-  }, []);
-
   const osActive = isOsPath(window.location.pathname);
 
   // The Desktop OS shell renders OUTSIDE any Router: each window supplies its
@@ -439,12 +415,7 @@ function AppInner({ backendInfo }: { backendInfo: BackendInfo }) {
         }}
       >
         <AntdApp>
-          <CloseWindowPrompt />
-          <DesktopUpdateProvider>
-            <UpdateTakeoverGate>
-              <ApprovalProvider>{routedContent}</ApprovalProvider>
-            </UpdateTakeoverGate>
-          </DesktopUpdateProvider>
+          <ApprovalProvider>{routedContent}</ApprovalProvider>
         </AntdApp>
       </ConfigProvider>
     </>

@@ -15,11 +15,9 @@ def test_live_operation_defaults_on_and_persisted_disable_wins(
     config_path = tmp_path / "model_config.json"
     monkeypatch.setenv("CREATOR_MODEL_CONFIG_PATH", str(config_path))
     monkeypatch.delenv("CREATOR_LIVE_OPERATION_ENABLED", raising=False)
-    monkeypatch.delenv("CREATOR_COMPUTER_USE_ENABLED", raising=False)
     config._clear_user_config_cache()
     try:
         assert config.get_live_operation_enabled() is True
-        assert config.get_computer_use_enabled() is False
 
         monkeypatch.setenv("CREATOR_LIVE_OPERATION_ENABLED", "0")
         assert config.get_live_operation_enabled() is False

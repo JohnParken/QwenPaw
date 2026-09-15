@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Scan local plugins, build distributable zips, and emit OSS metadata.
 
-Mirrors the shape of ``generate_oss_metadata.py`` so the resulting
+Produces plugin release metadata so the resulting
 ``metadata/plugins/index.json`` is a drop-in product entry for the existing
 Downloads page (it iterates ``mainIndex.products`` regardless of product type).
 

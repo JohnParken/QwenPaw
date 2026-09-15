@@ -21,7 +21,6 @@ try:
         decrypt as _secret_decrypt,
         is_encrypted as _secret_is_encrypted,
     )
-
     _SECRET_STORE_AVAILABLE = True
 except ImportError:
     _SECRET_STORE_AVAILABLE = False
@@ -2150,17 +2149,3 @@ def get_live_operation_timeout_seconds() -> float:
         minimum=30.0,
         maximum=3600.0,
     )
-
-
-def get_computer_use_enabled() -> bool:
-    """Whether the agent may operate desktop apps in this deployment.
-
-    Off by default: desktop control needs the Tauri host's native runtime and
-    is meaningless on a headless server, so it is opt-in rather than assumed.
-    """
-    raw = _live_operation_value(
-        "computer_use_enabled",
-        "CREATOR_COMPUTER_USE_ENABLED",
-        "0",
-    )
-    return str(raw).strip().casefold() not in {"0", "false", "no", "off"}

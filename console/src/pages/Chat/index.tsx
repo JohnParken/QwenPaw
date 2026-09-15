@@ -137,6 +137,15 @@ import type { ParsedFileReference } from "./fileReferenceFormatting";
 import { scrollReverseMessageList } from "./messageScroll";
 import { LONG_CHAT_USER_MESSAGE_ANCHORS } from "./longChatPerformance";
 import { isApprovalInCurrentScope } from "./approvalScope";
+import TLPreview from "./components/TLPreview";
+import {
+  consumeTLPreviewEvent,
+  createTLPreviewStore,
+  isTLPreviewPayload,
+  TL_PREVIEW_CAPABILITY,
+  wrapTLPreviewLifecycle,
+  type TLPreviewStore,
+} from "./tlPreview";
 
 interface ApprovalMessageData {
   requestId: string;
@@ -1378,6 +1387,30 @@ export default function ChatPage() {
   );
   const pendingFallbackEventsRef = useRef<ModelFallbackEvent[]>([]);
   const pendingFallbackEventKeysRef = useRef<Set<string>>(new Set());
+  const [tlPreviewStore, setTLPreviewStore] =
+    useState<TLPreviewStore>(createTLPreviewStore);
+  const tlPreviewStoreRef = useRef(tlPreviewStore);
+  const tlPreviewStreamEpochRef = useRef(0);
+  tlPreviewStoreRef.current = tlPreviewStore;
+  const clearTLPreview = useCallback(() => {
+    const next = createTLPreviewStore();
+    tlPreviewStoreRef.current = next;
+    setTLPreviewStore(next);
+  }, []);
+  const consumeTLPreview = useCallback((payload: unknown): boolean => {
+    if (!isTLPreviewPayload(payload)) return false;
+    const result = consumeTLPreviewEvent(tlPreviewStoreRef.current, payload);
+    if (result.store !== tlPreviewStoreRef.current) {
+      tlPreviewStoreRef.current = result.store;
+      setTLPreviewStore(result.store);
+    }
+    return result.handled;
+  }, []);
+
+  useEffect(() => {
+    tlPreviewStreamEpochRef.current += 1;
+    clearTLPreview();
+  }, [activeSessionId, clearTLPreview, selectedAgent]);
   // Use sessionApi.lastActiveChatId when available to avoid "new" collision
   const queueSessionIdRef = useRef(queueSessionId);
   queueSessionIdRef.current = queueSessionId;
@@ -2748,6 +2781,11 @@ export default function ChatPage() {
       biz_params?: Record<string, unknown>;
       signal?: AbortSignal;
     }): Promise<Response> => {
+      clearTLPreview();
+      const previewEpoch = ++tlPreviewStreamEpochRef.current;
+      const finishPreview = () => {
+        if (previewEpoch === tlPreviewStreamEpochRef.current) clearTLPreview();
+      };
       const directSubmission = pendingDirectSubmissionRef.current;
       pendingDirectSubmissionRef.current = null;
       const requestUsesQwenPawBackend =
@@ -2913,6 +2951,37 @@ export default function ChatPage() {
         submissionIdentity,
       );
 
+      // Console can replace temporary preview state, so advertise the
+      // capability in request metadata. Preserve capabilities supplied by
+      // extensions while keeping this out of the provider request fields.
+      const requestContext =
+        requestBody.request_context &&
+        typeof requestBody.request_context === "object"
+          ? (requestBody.request_context as Record<string, unknown>)
+          : {};
+      const rawCapabilities = requestContext.capabilities;
+      let advertisedCapabilities: unknown;
+      if (Array.isArray(rawCapabilities)) {
+        const list = rawCapabilities.filter(
+          (capability): capability is string => typeof capability === "string",
+        );
+        if (!list.includes(TL_PREVIEW_CAPABILITY)) {
+          list.push(TL_PREVIEW_CAPABILITY);
+        }
+        advertisedCapabilities = list;
+      } else if (rawCapabilities && typeof rawCapabilities === "object") {
+        advertisedCapabilities = {
+          ...(rawCapabilities as Record<string, unknown>),
+          [TL_PREVIEW_CAPABILITY]: true,
+        };
+      } else {
+        advertisedCapabilities = [TL_PREVIEW_CAPABILITY];
+      }
+      requestBody.request_context = {
+        ...requestContext,
+        capabilities: advertisedCapabilities,
+      };
+
       const submissionConversationReference =
         getSubmissionConversationReference(biz_params, submissionSdkSessionId);
       const backendChatId = submissionConversationReference
@@ -2948,16 +3017,23 @@ export default function ChatPage() {
 
       headlineStreamFilterRef.current = createHeadlineFilterState();
 
-      const response = await fetch(getApiUrl("/console/chat"), {
-        method: "POST",
-        headers,
-        body: JSON.stringify(requestBody),
-        signal: data.signal,
-      });
+      let response: Response;
+      try {
+        response = await fetch(getApiUrl("/console/chat"), {
+          method: "POST",
+          headers,
+          body: JSON.stringify(requestBody),
+          signal: data.signal,
+        });
+      } catch (error) {
+        finishPreview();
+        throw error;
+      }
 
       if (!response.ok && backendChatId) {
         sessionApi.discardLastUserMessage(backendChatId, clientMessageId);
       }
+      if (!response.ok) finishPreview();
 
       const localIdToResolve =
         getSubmissionConversationReference(
@@ -2974,9 +3050,19 @@ export default function ChatPage() {
         sessionApi.triggerResolve(submissionIdToResolve);
       }
 
-      return wrapChatResponseUsageStream(response, chatRef, usageTurn);
+      return wrapTLPreviewLifecycle(
+        wrapChatResponseUsageStream(response, chatRef, usageTurn),
+        finishPreview,
+        data.signal,
+      );
     },
-    [extLists, selectedAgent, runningConfigApprovalLevel, usesQwenPawBackend],
+    [
+      clearTLPreview,
+      extLists,
+      selectedAgent,
+      runningConfigApprovalLevel,
+      usesQwenPawBackend,
+    ],
   );
 
   const handleFileUpload = useCallback(
@@ -3624,6 +3710,15 @@ export default function ChatPage() {
         fetch: customFetch,
         responseParser: (chunk: string) => {
           const payload = JSON.parse(chunk) as Record<string, unknown>;
+          // Ephemeral preview events never enter the SDK message Builder or
+          // headline aggregation. Return the same harmless heartbeat shape
+          // used by replay boundaries so the stream keeps flowing.
+          if (consumeTLPreview(payload)) {
+            return { object: "message", type: "heartbeat" } as any;
+          }
+          if (payloadCompletesResponse(payload)) {
+            clearTLPreview();
+          }
           markLoopModeRunning();
           sanitizeHeadlinePayload(payload, headlineStreamFilterRef.current);
 
@@ -3713,6 +3808,7 @@ export default function ChatPage() {
         },
         onFileCardClick,
         cancel(data: { session_id: string }) {
+          clearTLPreview();
           const routeChatId = chatIdRef.current;
           const routeIdentity = sessionApi.getSessionIdentity(routeChatId);
           const resolvedRouteChatId = resolveBackendChatId(routeChatId);
@@ -3841,6 +3937,8 @@ export default function ChatPage() {
       },
     } as unknown as IAgentScopeRuntimeWebUIOptions;
   }, [
+    clearTLPreview,
+    consumeTLPreview,
     customFetch,
     copyResponse,
     handleFileUpload,
@@ -3949,6 +4047,7 @@ export default function ChatPage() {
               void openInlineFileReference(reference, trigger)
             }
           >
+            <TLPreview store={tlPreviewStore} />
             <AgentScopeRuntimeWebUI
               ref={chatRef}
               key={refreshKey}

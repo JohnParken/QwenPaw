@@ -282,51 +282,6 @@ Image được xây dựng từ đầu. Để tự xây dựng image, vui lòng 
 
 ---
 
-### Tùy Chọn 7: Ứng Dụng Desktop (Beta)
-
-> **Thông báo Beta**: Ứng dụng desktop hiện đang trong giai đoạn thử nghiệm Beta với các hạn chế đã biết sau:
-> - **Kiểm tra tương thích chưa đầy đủ**: Chưa được kiểm tra đầy đủ trên tất cả các phiên bản hệ thống và cấu hình phần cứng
-> - **Có thể có vấn đề về hiệu suất**: Thời gian khởi động, sử dụng bộ nhớ và các khía cạnh hiệu suất khác có thể cần tối ưu thêm
-> - **Tính năng đang phát triển**: Một số tính năng có thể không ổn định hoặc bị thiếu
-
-Nếu bạn không quen với công cụ dòng lệnh, bạn có thể tải xuống và sử dụng ứng dụng desktop của QwenPaw mà không cần cấu hình môi trường Python thủ công hay chạy lệnh.
-
-#### Tải Xuống
-
-Tải ứng dụng desktop (bản Tauri) từ [trang tải xuống chính thức](https://qwenpaw.agentscope.io/downloads):
-- **Windows**: `QwenPaw-Tauri-<version>-Windows-setup.exe`
-- **macOS**: `QwenPaw-Tauri-<version>-macOS.zip` (khuyên dùng Apple Silicon)
-
-#### Tính Năng
-
-- ✅ **Không cấu hình**: Tải về và nhấp đúp để chạy, không cần cài Python hay cấu hình biến môi trường
-- ✅ **Đa nền tảng**: Hỗ trợ Windows 10+ và macOS 14+
-- ✅ **Giao diện trực quan**: Tự động mở cửa sổ ứng dụng, không cần nhập địa chỉ thủ công
-- ⚠️ **Giai đoạn Beta**: Các tính năng đang được liên tục cải thiện, rất mong nhận phản hồi
-
-#### Lần Đầu Khởi Động
-
-**Quan trọng**: Lần đầu khởi động có thể mất 10-60 giây (tùy thuộc vào cấu hình hệ thống của bạn). Ứng dụng cần khởi tạo môi trường Python và tải các phụ thuộc. Vui lòng kiên nhẫn chờ cửa sổ tự động mở.
-
-#### macOS: Vượt Qua Rào Cản Bảo Mật Hệ Thống
-
-Khi bạn tải ứng dụng macOS QwenPaw từ Releases, macOS có thể hiển thị: *"Apple không thể xác minh rằng 'QwenPaw' không chứa phần mềm độc hại"*. Điều này xảy ra vì ứng dụng chưa được notarization. Bạn vẫn có thể mở nó như sau:
-
-- **Nhấp chuột phải để mở (khuyên dùng)**
-  Nhấp chuột phải (hoặc Control+click) vào ứng dụng QwenPaw → **Open** → trong hộp thoại, nhấp **Open** lần nữa. Thao tác này báo cho Gatekeeper rằng bạn tin tưởng ứng dụng; sau đó bạn có thể nhấp đúp để khởi chạy như bình thường.
-
-- **Cho phép trong System Settings**
-  Nếu vẫn bị chặn, vào **System Settings → Privacy & Security**, cuộn đến thông báo như *"QwenPaw was blocked because it is from an unidentified developer"*, và nhấp **Open Anyway** hoặc **Allow**.
-
-- **Xóa thuộc tính cách ly (không khuyên dùng cho hầu hết người dùng)**
-  Trong Terminal chạy:
-  `xattr -cr "/Applications/QwenPaw Desktop.app"`
-  (hoặc dùng đường dẫn tới tệp `.app` sau khi giải nén). Thao tác này xóa cờ cách ly "đã tải xuống từ internet" để cảnh báo thường không xuất hiện, nhưng kém an toàn và kiểm soát hơn so với dùng **Nhấp chuột phải → Open**.
-
-Để biết hướng dẫn sử dụng chi tiết, khắc phục sự cố và các vấn đề thường gặp, xem [Hướng dẫn ứng dụng Desktop](https://qwenpaw.agentscope.io/docs/desktop).
-
----
-
 ### Tiếp Theo?
 
 Sau khi cài đặt, cấu hình mô hình trong **Console → Settings → Models**, rồi khám phá:
@@ -402,7 +357,6 @@ Xem [Bảo mật](https://qwenpaw.agentscope.io/docs/security) để biết chi 
 | [Bắt đầu nhanh](https://qwenpaw.agentscope.io/docs/quickstart)        | Cài đặt và chạy (cục bộ hoặc ModelScope Studio)      |
 | [Console](https://qwenpaw.agentscope.io/docs/console)                 | Giao diện Web: chat và cấu hình tác nhân              |
 | [Terminal UI (TUI)](https://qwenpaw.agentscope.io/docs/tui)             | Chat terminal toàn màn hình, cùng tác nhân với Console |
-| [Ứng dụng Desktop](https://qwenpaw.agentscope.io/docs/desktop)               | Cài đặt và sử dụng ứng dụng desktop       |
 | [Mô hình](https://qwenpaw.agentscope.io/docs/models)                  | Cấu hình nhà cung cấp đám mây, cục bộ và tùy chỉnh   |
 | [Kênh](https://qwenpaw.agentscope.io/docs/channels)                   | DingTalk, Lark, QQ, Discord, iMessage, và hơn nữa  |
 | [Skills](https://qwenpaw.agentscope.io/docs/skills)                  | Mở rộng và tùy chỉnh khả năng                         |
@@ -451,7 +405,6 @@ Tài liệu đầy đủ: [qwenpaw.agentscope.io/docs](https://qwenpaw.agentscop
 | **Ngữ cảnh**                   | Nén lời nhắc hệ thống                         | Đang thực hiện        |
 | **Hệ thống công cụ**           | Thay đổi tệp ở nhiều vị trí                   | Đang thực hiện        |
 |                                | Terminal liên tục và tác vụ nền               | Đang thực hiện        |
-| **Computer-use**               | Xác định và thao tác mục tiêu trên màn hình   | Đang thực hiện        |
 | **Tương tác giọng nói**        | Tác vụ giọng nói thời gian thực               | Đang thực hiện        |
 | **Quản lý ngữ cảnh và bộ nhớ** | Chuyển nóng mô hình vector và backend lưu trữ | Đang thực hiện        |
 |                                | Cơ sở tri thức cá nhân                        | Đang thực hiện        |

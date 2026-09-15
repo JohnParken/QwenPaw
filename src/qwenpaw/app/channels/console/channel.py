@@ -17,6 +17,7 @@ import json as _json
 import logging
 import os
 import sys
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
@@ -45,7 +46,12 @@ from ..base import (
     TextContent,
 )
 from ..utils import file_url_to_local_path
-
+from ....providers.tl_preview import (
+    TL_PREVIEW_CAPABILITY,
+    is_preview_event,
+    preview_event_payload,
+    preview_scope,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -275,6 +281,29 @@ class ConsoleChannel(BaseChannel):
             request.model_slot_override = mso
         return request
 
+    @staticmethod
+    def _client_advertises_preview(payload: Any, request: Any) -> bool:
+        """Return true only for an explicit Console capability opt-in."""
+        contexts: list[Any] = []
+        if isinstance(payload, dict):
+            meta = payload.get("meta")
+            if isinstance(meta, dict):
+                contexts.append(meta.get("request_context"))
+            contexts.append(payload.get("request_context"))
+        contexts.append(getattr(request, "request_context", None))
+
+        for context in contexts:
+            if not isinstance(context, dict):
+                continue
+            capabilities = context.get("capabilities")
+            if isinstance(capabilities, dict):
+                if capabilities.get(TL_PREVIEW_CAPABILITY) is True:
+                    return True
+            elif isinstance(capabilities, (list, tuple, set, frozenset)):
+                if TL_PREVIEW_CAPABILITY in capabilities:
+                    return True
+        return False
+
     async def _extract_media_message(self, message: Message) -> Message | None:
         """Extract media message from message."""
         parts = self._message_to_content_parts(message)
@@ -420,59 +449,74 @@ class ConsoleChannel(BaseChannel):
             event_count = 0
             headline_stream_states: dict[str, Any] = {}
 
-            async for event in self._process(request):
-                event_count += 1
-                obj = getattr(event, "object", None)
-                status = getattr(event, "status", None)
-                ev_type = getattr(event, "type", None)
+            preview_enabled = self._client_advertises_preview(payload, request)
+            with preview_scope(
+                run_id=session_id,
+                invocation_id="invocation_" + uuid.uuid4().hex,
+                enabled=preview_enabled,
+            ):
+                async for event in self._process(request):
+                    event_count += 1
+                    if is_preview_event(event):
+                        data = _json.dumps(
+                            preview_event_payload(event),
+                            ensure_ascii=False,
+                            default=str,
+                        )
+                        yield f"data: {data}\n\n"
+                        continue
 
-                logger.debug(
-                    "console event #%s: object=%s status=%s type=%s",
-                    event_count,
-                    obj,
-                    status,
-                    ev_type,
-                )
+                    obj = getattr(event, "object", None)
+                    status = getattr(event, "status", None)
+                    ev_type = getattr(event, "type", None)
 
-                if (
-                    event.object == "response"
-                    and event.status == RunStatus.Completed
-                ):
-                    event_output = event.output
-                    event.output = []
-                    if event_output is not None:
-                        for message in event_output:
-                            event.output.append(message)
-
-                if obj == "message" and status == RunStatus.Completed:
-                    msg_id = str(
-                        getattr(event, "msg_id", "")
-                        or getattr(event, "id", "")
-                        or "",
+                    logger.debug(
+                        "console event #%s: object=%s status=%s type=%s",
+                        event_count,
+                        obj,
+                        status,
+                        ev_type,
                     )
-                    for pending_data in self._flush_headline_stream_states(
-                        headline_stream_states,
-                        msg_id=msg_id,
+
+                    if (
+                        event.object == "response"
+                        and event.status == RunStatus.Completed
                     ):
-                        yield f"data: {pending_data}\n\n"
-                elif obj == "response" and status == RunStatus.Completed:
-                    for pending_data in self._flush_headline_stream_states(
+                        event_output = event.output
+                        event.output = []
+                        if event_output is not None:
+                            for message in event_output:
+                                event.output.append(message)
+
+                    if obj == "message" and status == RunStatus.Completed:
+                        msg_id = str(
+                            getattr(event, "msg_id", "")
+                            or getattr(event, "id", "")
+                            or "",
+                        )
+                        for pending_data in self._flush_headline_stream_states(
+                            headline_stream_states,
+                            msg_id=msg_id,
+                        ):
+                            yield f"data: {pending_data}\n\n"
+                    elif obj == "response" and status == RunStatus.Completed:
+                        for pending_data in self._flush_headline_stream_states(
+                            headline_stream_states,
+                        ):
+                            yield f"data: {pending_data}\n\n"
+
+                    data = self._serialize_event_for_sse(
+                        event,
                         headline_stream_states,
-                    ):
-                        yield f"data: {pending_data}\n\n"
+                    )
+                    yield f"data: {data}\n\n"
 
-                data = self._serialize_event_for_sse(
-                    event,
-                    headline_stream_states,
-                )
-                yield f"data: {data}\n\n"
+                    if obj == "message" and status == RunStatus.Completed:
+                        parts = self._message_to_content_parts(event)
+                        self._print_parts(parts, ev_type)
 
-                if obj == "message" and status == RunStatus.Completed:
-                    parts = self._message_to_content_parts(event)
-                    self._print_parts(parts, ev_type)
-
-                elif obj == "response":
-                    last_response = event
+                    elif obj == "response":
+                        last_response = event
 
             for pending_data in self._flush_headline_stream_states(
                 headline_stream_states,

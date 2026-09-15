@@ -154,3 +154,4 @@ docs-site/
 # Local review notes
 docs/reviews/
 tmp/
+*.zip
