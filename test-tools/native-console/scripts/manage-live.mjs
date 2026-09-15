@@ -65,21 +65,84 @@ async function waitForPort(port, timeoutSec, name) {
   return false;
 }
 
-// 自动探测 Python 解释器
-function findPython() {
-  if (process.env.VIRTUAL_ENV) {
-    const venvPy = IS_WIN
-      ? path.join(process.env.VIRTUAL_ENV, "Scripts", "python.exe")
-      : path.join(process.env.VIRTUAL_ENV, "bin", "python");
-    if (fs.existsSync(venvPy)) return venvPy;
+// 获取扩展 PATH 的环境变量（确保能找到 uv、node、python）
+function getExtendedEnv() {
+  const home = os.homedir();
+  const extraPaths = IS_WIN
+    ? [
+        path.join(home, ".cargo", "bin"),
+        path.join(home, "AppData", "Local", "Programs", "uv"),
+        path.join(home, ".local", "bin"),
+      ]
+    : [
+        path.join(home, ".local", "bin"),
+        path.join(home, ".cargo", "bin"),
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+      ];
+  const sep = path.delimiter;
+  const currentPath = process.env.PATH || "";
+  const newPath = [...extraPaths, currentPath].filter(Boolean).join(sep);
+  return {
+    ...process.env,
+    PATH: newPath,
+  };
+}
+
+// 探测启动 Python 的命令环境（优先使用 uv 环境，执行 uv run python -m qwenpaw app --port 8088）
+function findPythonRunner() {
+  const home = os.homedir();
+  const uvBinary = IS_WIN ? "uv.exe" : "uv";
+  const commonUvPaths = IS_WIN
+    ? [
+        path.join(home, ".cargo", "bin", "uv.exe"),
+        path.join(home, "AppData", "Local", "Programs", "uv", "uv.exe"),
+        path.join(home, ".local", "bin", "uv.exe"),
+      ]
+    : [
+        path.join(home, ".local", "bin", "uv"),
+        path.join(home, ".cargo", "bin", "uv"),
+        "/opt/homebrew/bin/uv",
+        "/usr/local/bin/uv",
+      ];
+
+  const env = getExtendedEnv();
+
+  // 1. 检测系统中是否有 uv
+  for (const candidate of [uvBinary, ...commonUvPaths]) {
+    try {
+      if (candidate === uvBinary || fs.existsSync(candidate)) {
+        execSync(`"${candidate}" --version`, { stdio: "ignore", env });
+        return {
+          cmd: candidate,
+          args: ["run", "python", "-m", "qwenpaw", "app", "--port", "8088"],
+          desc: `uv 环境 (${candidate} run python -m qwenpaw app --port 8088)`,
+        };
+      }
+    } catch {}
   }
 
-  const rootVenvPy = IS_WIN
+  // 2. 若直接探活被环境策略限制，默认以 uv 命令为准并配置 fallback 兜底
+  const venvPy = IS_WIN
     ? path.join(WORKSPACE_ROOT, ".venv", "Scripts", "python.exe")
     : path.join(WORKSPACE_ROOT, ".venv", "bin", "python");
-  if (fs.existsSync(rootVenvPy)) return rootVenvPy;
 
-  return IS_WIN ? "python" : "python3";
+  return {
+    cmd: "uv",
+    args: ["run", "python", "-m", "qwenpaw", "app", "--port", "8088"],
+    desc: "uv 环境 (uv run python -m qwenpaw app --port 8088)",
+    fallback: fs.existsSync(venvPy)
+      ? {
+          cmd: venvPy,
+          args: ["-m", "qwenpaw", "app", "--port", "8088"],
+          desc: `虚拟环境 Python (${venvPy})`,
+        }
+      : {
+          cmd: IS_WIN ? "python" : "python3",
+          args: ["-m", "qwenpaw", "app", "--port", "8088"],
+          desc: `系统 Python (${IS_WIN ? "python" : "python3"})`,
+        },
+  };
 }
 
 // 保存 PID
@@ -119,6 +182,7 @@ function spawnBackground(cmd, args, cwd, logFileName) {
     stdio: ["ignore", out, err],
     windowsHide: true,
     shell: IS_WIN,
+    env: getExtendedEnv(),
   });
 
   proc.unref();
@@ -220,9 +284,14 @@ async function startTlProxy() {
     execSync("npm run build", { cwd: TL_PROXY_DIR, stdio: "inherit" });
   }
 
+  const proxyArgs = [cliJs];
+  if (fs.existsSync(envFile)) {
+    proxyArgs.push("--env-file", envFile);
+  }
+
   const pid = spawnBackground(
     process.execPath,
-    [cliJs],
+    proxyArgs,
     TL_PROXY_DIR,
     "tl-proxy.log",
   );
@@ -246,21 +315,36 @@ async function startQwenPawBackend() {
     return true;
   }
 
-  const pythonExec = findPython();
-  console.log(`  ℹ 检测到 Python 解释器: ${pythonExec}`);
+  const runner = findPythonRunner();
+  console.log(`  ℹ 使用 ${runner.desc}`);
 
-  const pid = spawnBackground(
-    pythonExec,
-    ["-m", "qwenpaw", "app", "--port", "8088"],
-    WORKSPACE_ROOT,
-    "qwenpaw.log",
-  );
+  let pid;
+  try {
+    pid = spawnBackground(
+      runner.cmd,
+      runner.args,
+      WORKSPACE_ROOT,
+      "qwenpaw.log",
+    );
+  } catch (err) {
+    if (runner.fallback) {
+      console.log(`  ⚠️ 优先 uv 启动异常，降级使用: ${runner.fallback.desc}`);
+      pid = spawnBackground(
+        runner.fallback.cmd,
+        runner.fallback.args,
+        WORKSPACE_ROOT,
+        "qwenpaw.log",
+      );
+    } else {
+      throw err;
+    }
+  }
   savePid("qwenpaw", pid);
 
-  const ready = await waitForPort(8088, 20, "QwenPaw Python 后端");
+  const ready = await waitForPort(8088, 45, "QwenPaw Python 后端");
   if (!ready) {
     console.error(
-      `❌ 错误: QwenPaw 后端未能在 20 秒内就绪，排查日志: ${path.join(LOG_DIR, "qwenpaw.log")}`,
+      `❌ 错误: QwenPaw 后端未能在 45 秒内就绪，排查日志: ${path.join(LOG_DIR, "qwenpaw.log")}`,
     );
     return false;
   }
@@ -424,7 +508,7 @@ async function main() {
 
     // 清理 run 目录
     try {
-      if (fs.existsSync(PID_DIR)) fs.rmdirSync(PID_DIR, { recursive: true });
+      if (fs.existsSync(PID_DIR)) fs.rmSync(PID_DIR, { recursive: true, force: true });
     } catch {}
 
     console.log("============================================================");

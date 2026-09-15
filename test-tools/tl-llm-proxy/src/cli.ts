@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { existsSync } from 'node:fs';
 import { loadEnvFile } from 'node:process';
 import { loadConfig } from './config.js';
 import { createProxy } from './server.js';
@@ -11,6 +12,8 @@ async function main(): Promise<void> {
   if (args.length) {
     if (args.length !== 2 || args[0] !== '--env-file' || !args[1]) throw new Error('Usage: tl-llm-proxy [--env-file PATH]');
     loadEnvFile(args[1]);
+  } else if (existsSync('.env')) {
+    loadEnvFile('.env');
   }
   const proxy = createProxy(loadConfig());
   try {
@@ -27,4 +30,9 @@ async function main(): Promise<void> {
   };
   process.on('SIGINT', stop); process.on('SIGTERM', stop);
 }
-main().catch(() => { process.stderr.write('Proxy startup failed. Check required configuration, listen address and log sink.\n'); process.exitCode = 1; });
+main().catch((err) => {
+  const msg = err instanceof Error ? err.message : String(err);
+  process.stderr.write(`Proxy startup failed: ${msg}. Check required configuration, listen address and log sink.\n`);
+  process.exitCode = 1;
+});
+

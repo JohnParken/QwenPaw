@@ -179,7 +179,7 @@ PLAYWRIGHT_CHANNEL=chrome npm run check
    npm run live:services
    ```
 
-   > 脚本将自动检测并编译 `tl-llm-proxy`，自动检测 Python 解释器（`.venv` / 系统环境），后台拉起服务并轮询端口直至就绪。
+   > 脚本将自动检测并编译 `tl-llm-proxy`，优先使用 `uv` 环境（执行 `uv run python -m qwenpaw app --port 8088`），后台拉起服务并轮询端口直至就绪。
 
 2. **第二步：启动方案 B 实战联调控制台**（`Native Console` 端口 5179）
    ```bash
@@ -276,10 +276,12 @@ node dist/cli.js
 
 #### 步骤 2：启动本地 QwenPaw 后端服务（端口 8088）
 
+本项目已全面使用 `uv` 进行环境与依赖管理，推荐直接通过 `uv run` 启动：
+
 ```bash
-# 打开终端窗口 2：在项目根目录下启动
+# 打开终端窗口 2：在项目根目录下使用 uv 环境启动
 cd /Users/yangxuezhen/git/QwenPaw
-python -m qwenpaw app --port 8088
+uv run python -m qwenpaw app --port 8088
 ```
 
 #### 步骤 3：启动 Native Console 开发测试台（端口 5179）
