@@ -1,0 +1,18 @@
+{
+  "id": "docx",
+  "name": "docx",
+  "version": "1.0.0",
+  "description": "Create, inspect, edit, and validate DOCX documents.",
+  "entrypoints": [],
+  "python_packages": ["docx"],
+  "node_packages": [],
+  "allowed_commands": [],
+  "allowed_tools": ["list_files", "read_file", "write_file", "copy_file", "create_docx", "read_docx", "publish_artifact", "run_skill_script"],
+  "supported_mime_types": ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+  "output_patterns": ["*.docx"],
+  "runtime": "python",
+  "network": "disabled",
+  "timeout_seconds": 120,
+  "max_output_bytes": 65536,
+  "metadata": {"builtin": true, "required_commands": ["libreoffice", "pdftoppm"]}
+}

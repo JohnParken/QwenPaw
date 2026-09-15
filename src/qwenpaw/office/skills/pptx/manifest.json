@@ -1,0 +1,18 @@
+{
+  "id": "pptx",
+  "name": "pptx",
+  "version": "1.0.0",
+  "description": "Inspect, create, and validate PowerPoint presentations.",
+  "entrypoints": [],
+  "python_packages": ["pptx"],
+  "node_packages": [],
+  "allowed_commands": [],
+  "allowed_tools": ["list_files", "read_file", "write_file", "copy_file", "create_pptx", "read_pptx", "publish_artifact", "run_skill_script"],
+  "supported_mime_types": ["application/vnd.openxmlformats-officedocument.presentationml.presentation"],
+  "output_patterns": ["*.pptx"],
+  "runtime": "python",
+  "network": "disabled",
+  "timeout_seconds": 120,
+  "max_output_bytes": 65536,
+  "metadata": {"builtin": true, "required_commands": ["libreoffice", "pdftoppm"]}
+}
