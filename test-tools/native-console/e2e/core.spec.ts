@@ -217,3 +217,48 @@ test("401 可见、日志结构完整、敏感字段脱敏且响应文本不执�
   for (const secret of ["token-secret", "password-secret", "api-key-secret"])
     expect(exported).not.toContain(secret);
 });
+
+test("Agent 核心能力验证：收件箱、技能管理、工作区检查点与 Markdown 渲染", async ({
+  page,
+  mock,
+}) => {
+  await page.goto("/");
+  await connect(page);
+
+  // 1. 收件箱与审批
+  await page.locator('button[data-tab="inbox"]').click();
+  await expect(page.locator("#inbox-events-list")).toContainText(
+    "后台分析任务完成",
+  );
+  await expect(page.locator("#inbox-approval-list")).toContainText(
+    "rm -rf /tmp/cache",
+  );
+  await page.locator(".btn-trace-link").first().click();
+  await expect(page.locator("#inbox-trace-detail")).toContainText(
+    "Trace finished successfully",
+  );
+  await page.locator(".btn-approve-single").first().click();
+  await expect(page.locator("#notice")).toContainText("已批准执行");
+
+  // 2. 技能管理面板
+  await page.locator('button[data-tab="skills"]').click();
+  await expect(page.locator("#skills-list-grid")).toContainText("pdf_reader");
+  await expect(page.locator("#skills-list-grid")).toContainText("web_scraper");
+  const toggleBtn = page.locator(".btn-toggle-skill").first();
+  await expect(toggleBtn).toContainText("禁用技能");
+  await toggleBtn.click();
+  await expect(page.locator("#notice")).toContainText("已禁用");
+
+  // 3. 文件检查点
+  await page.locator('button[data-tab="files"]').click();
+  await page.locator("#new-chat").click();
+  await expect(page.locator("#checkpoints-list")).toContainText("初始基线快照");
+
+  // 4. 会话对话中的 Markdown 渲染
+  await page.locator('button[data-tab="chat"]').click();
+  await page.locator("#prompt").fill("test markdown");
+  await page.locator("#send").click();
+  await expect(
+    page.locator("#messages .assistant .msg-markdown-body"),
+  ).toBeVisible();
+});

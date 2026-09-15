@@ -22,6 +22,9 @@ export interface MockState {
   fileContent: string;
   etag: string;
   tlModelFailNext: boolean;
+  checkpoints: Array<Record<string, unknown>>;
+  inboxEvents: Array<Record<string, unknown>>;
+  skills: Array<Record<string, unknown>>;
 }
 
 export function createMockState(): MockState {
@@ -30,6 +33,38 @@ export function createMockState(): MockState {
     authEnabled: false,
     force401: false,
     delayChat: 0,
+    checkpoints: [
+      {
+        commit: "c1a2b3c4d5",
+        name: "初始基线快照",
+        created_at: "2026-09-15 10:00",
+      },
+    ],
+    inboxEvents: [
+      {
+        id: "ev-1",
+        title: "后台分析任务完成",
+        summary: "工作区分析已就绪",
+        read: false,
+        run_id: "run-99",
+      },
+    ],
+    skills: [
+      {
+        id: "pdf_reader",
+        name: "pdf_reader",
+        description: "提取 PDF 文本与图表",
+        enabled: true,
+        version: "1.0.0",
+      },
+      {
+        id: "web_scraper",
+        name: "web_scraper",
+        description: "网络爬虫数据采集",
+        enabled: false,
+        version: "0.2.0",
+      },
+    ],
     agents: [
       { id: "default", name: "Default", available_in_chat: true },
       { id: "agent-beta", name: "Beta", available_in_chat: true },
@@ -378,6 +413,103 @@ async function mockApi(route: Route, state: MockState): Promise<void> {
       contentType: "application/octet-stream",
       body: "download-body",
     });
+
+  if (path === "/api/console/inbox/events" && method === "GET") {
+    return json(route, { events: state.inboxEvents });
+  }
+  if (path === "/api/console/inbox/read" && method === "POST") {
+    const b = body as any;
+    if (b?.all) {
+      state.inboxEvents.forEach((e) => {
+        e.read = true;
+      });
+    } else if (Array.isArray(b?.event_ids)) {
+      state.inboxEvents.forEach((e) => {
+        if (b.event_ids.includes(e.id)) e.read = true;
+      });
+    }
+    return json(route, { success: true });
+  }
+  const traceMatch = path.match(/^\/api\/console\/inbox\/traces\/([^/]+)$/);
+  if (traceMatch && method === "GET") {
+    return json(route, {
+      run_id: traceMatch[1],
+      steps: [
+        { tool: "file_search", status: "completed" },
+        { tool: "write_file", status: "completed" },
+      ],
+      result: "Trace finished successfully",
+    });
+  }
+
+  if (path === "/api/console/chat/task" && method === "POST") {
+    return json(route, { task_id: "task-mock-123", timeout: 300 });
+  }
+  const bgTaskMatch = path.match(/^\/api\/console\/chat\/task\/([^/]+)$/);
+  if (bgTaskMatch && method === "GET") {
+    return json(route, {
+      status: "finished",
+      started_at: Date.now() - 5000,
+      result: { text: "后台任务分析已完成，结果已保存。" },
+    });
+  }
+
+  if (path === "/api/approval/list" && method === "GET") {
+    return json(route, {
+      pending_approvals: [
+        {
+          request_id: "req-1",
+          session_id: "sess-1",
+          tool_name: "shell",
+          arguments: { command: "rm -rf /tmp/cache" },
+          reasoning: "清理临时缓存需要审批",
+        },
+      ],
+    });
+  }
+  if (path === "/api/approval/approve" && method === "POST") {
+    return json(route, { approved: true });
+  }
+  if (path === "/api/approval/deny" && method === "POST") {
+    return json(route, { denied: true });
+  }
+
+  if (path === "/api/workspace/checkpoints/list" && method === "GET") {
+    return json(route, {
+      entries: state.checkpoints,
+      total: state.checkpoints.length,
+    });
+  }
+  if (path === "/api/workspace/checkpoints/snapshot" && method === "POST") {
+    const cp = {
+      commit: `c-${Date.now().toString(16)}`,
+      name: String((body as any)?.name || "快照"),
+      created_at: new Date().toLocaleTimeString(),
+    };
+    state.checkpoints.unshift(cp);
+    return json(route, cp);
+  }
+  if (path === "/api/workspace/checkpoints/restore" && method === "POST") {
+    return json(route, { restored: true, commit: (body as any)?.commit });
+  }
+
+  if (path === "/api/skills" && method === "GET") {
+    return json(route, state.skills);
+  }
+  const skillToggleMatch = path.match(
+    /^\/api\/skills\/([^/]+)\/(enable|disable)$/,
+  );
+  if (skillToggleMatch && method === "POST") {
+    const skillName = decodeURIComponent(skillToggleMatch[1]);
+    const action = skillToggleMatch[2];
+    const skill = state.skills.find(
+      (s) => s.name === skillName || s.id === skillName,
+    );
+    if (skill) {
+      skill.enabled = action === "enable";
+    }
+    return json(route, { success: true, skill });
+  }
 
   // Deliberately do not continue unknown API requests to the network.
   return json(route, { detail: `Unmocked API route: ${method} ${path}` }, 404);

@@ -129,7 +129,7 @@ export class TLPanel {
       () =>
         void run(async () => {
           const provider = this.selected();
-          const model = val("tl-model");
+          const model = val("tl-model") || "deepseek-v4-flash";
           if (!model) throw new Error("该 TL Provider 尚未配置模型标签");
           await this.api.request("/api/models/active", {
             method: "PUT",
@@ -152,12 +152,15 @@ export class TLPanel {
     );
     el<HTMLFieldSetElement>("tl-fields").disabled = true;
     el<HTMLInputElement>("tl-key").value = "";
-    el<HTMLInputElement>("tl-url").value = "";
+    el<HTMLInputElement>("tl-url").value = "http://127.0.0.1:8089";
     for (const [key] of TL_FIELDS) el<HTMLInputElement>("tl-" + key).value = "";
-    el<HTMLSelectElement>("tl-model").replaceChildren();
+    el<HTMLSelectElement>("tl-model").replaceChildren(
+      new Option("deepseek-v4-flash", "deepseek-v4-flash"),
+    );
     el("tl-result").textContent = "未加载 TL Provider";
     el("tl-active").textContent = "请读取当前 Agent 的模型配置";
-    el("chat-provider").textContent = "发送前自动核对当前 Agent 模型";
+    el("chat-provider").textContent =
+      "默认模型：tlproxy / deepseek-v4-flash · TL 仅文本";
   }
   async load(preferred = val("tl-provider")): Promise<void> {
     const providers = await this.api.request<RecordValue[]>("/api/models");
@@ -173,14 +176,24 @@ export class TLPanel {
         (item) => new Option(`${item.name || item.id} (${item.id})`, item.id),
       ),
     );
-    const selected = preferred || active.active_llm?.provider_id;
-    if (tl.some((item) => item.id === selected)) select.value = selected;
+    const defaultTl =
+      tl.find((item) => item.id === "tlproxy" || item.id === "tlprovider") ||
+      tl[0];
+    const selected =
+      preferred ||
+      (tl.some((item) => item.id === active.active_llm?.provider_id)
+        ? active.active_llm?.provider_id
+        : defaultTl?.id);
+    if (selected && tl.some((item) => item.id === selected))
+      select.value = selected;
     const activeProvider = providers.find(
       (item) => item.id === active.active_llm?.provider_id,
     );
     el("chat-provider").textContent = activeProvider
       ? `当前模型：${activeProvider.id} / ${active.active_llm?.model} · ${activeProvider.chat_model === "TLChatModel" ? "TL 仅文本，附件不可用" : activeProvider.chat_model || "常规模型"}`
-      : "当前 Agent 尚未设置模型";
+      : defaultTl
+        ? `默认模型：${defaultTl.id} / deepseek-v4-flash · TL 仅文本`
+        : "当前 Agent 尚未设置模型";
     el("tl-active").textContent =
       `当前 Agent：${this.api.agent} · 生效模型：${active.active_llm?.provider_id || "未设置"} / ${active.active_llm?.model || "未设置"}`;
     this.fill();
@@ -205,7 +218,8 @@ export class TLPanel {
         "后端未返回 TL Provider，请先配置 tl-provider.json 再读取。";
       return;
     }
-    el<HTMLInputElement>("tl-url").value = provider.base_url || "";
+    el<HTMLInputElement>("tl-url").value =
+      provider.base_url || "http://127.0.0.1:8089";
     for (const [key, , fallback] of TL_FIELDS)
       el<HTMLInputElement>("tl-" + key).value = String(
         provider.tl_config?.[key] ?? fallback,
@@ -223,9 +237,15 @@ export class TLPanel {
           .map((item) => String(item.id)),
       ),
     ];
+    if (ids.length === 0) {
+      ids.push("deepseek-v4-flash");
+    }
     el<HTMLSelectElement>("tl-model").replaceChildren(
       ...ids.map((id) => new Option(id, id)),
     );
+    if (ids.includes("deepseek-v4-flash")) {
+      el<HTMLSelectElement>("tl-model").value = "deepseek-v4-flash";
+    }
     el("tl-result").textContent =
       `已加载 ${provider.id}。测试使用当前表单值，保存前不会修改后端配置。`;
   }
