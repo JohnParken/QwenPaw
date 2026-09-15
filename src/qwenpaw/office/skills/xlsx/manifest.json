@@ -1,12 +1,12 @@
 {
   "id": "xlsx",
   "name": "xlsx",
-  "version": "1.0.0",
+  "version": "1.1",
   "description": "Read, transform, create, and validate Excel workbooks and tabular data.",
-  "entrypoints": [],
+  "entrypoints": ["scripts/recalc.py"],
   "python_packages": ["openpyxl", "pandas", "pyarrow", "xlsxwriter"],
   "node_packages": [],
-  "allowed_commands": [],
+  "allowed_commands": ["python"],
   "allowed_tools": ["list_files", "read_file", "write_file", "copy_file", "create_xlsx", "read_xlsx", "read_table", "profile_table", "aggregate_table", "pivot_table", "create_chart", "publish_artifact", "run_skill_script"],
   "supported_mime_types": ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "text/csv", "text/tab-separated-values", "application/vnd.apache.parquet"],
   "output_patterns": ["*.xlsx", "*.csv", "*.tsv", "*.parquet"],
@@ -14,5 +14,9 @@
   "network": "disabled",
   "timeout_seconds": 120,
   "max_output_bytes": 65536,
-  "metadata": {"builtin": true, "required_commands": ["libreoffice", "pdftoppm"]}
+  "metadata": {
+    "builtin": true,
+    "native_source": "src/qwenpaw/agents/skills/xlsx-zh",
+    "required_commands": ["libreoffice", "pdftoppm"]
+  }
 }

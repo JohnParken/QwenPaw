@@ -101,7 +101,10 @@ class _RepositoryMixin:
         if existing:
             if existing[0].get("request_hash") != request_hash:
                 raise IdempotencyConflict("request id reused with different payload")
-            return existing[0]
+            # The API layer performs completed-result replay before claiming a
+            # turn. Reaching this branch means another instance won the claim,
+            # so it must not execute the same request a second time.
+            raise OfficeStorageError("turn already exists")
         return await self._create("turns", tenant_id, user_id, turn_id or uuid.uuid4().hex, payload)
 
     async def get_turn(self, tenant_id: str, user_id: str, session_id: str, turn_id: str) -> dict[str, Any] | None:
@@ -155,6 +158,52 @@ class _RepositoryMixin:
 
     async def create_skill_execution(self, tenant_id: str, user_id: str, execution_id: str | None = None, *, data: Mapping[str, Any] | None = None, **fields: Any) -> dict[str, Any]:
         return await self._create("skill_executions", tenant_id, user_id, execution_id or uuid.uuid4().hex, {**dict(data or {}), **fields})
+
+    async def request_turn_cancel(
+        self,
+        tenant_id: str,
+        user_id: str,
+        session_id: str,
+        request_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Persist a cancellation request for the active turn.
+
+        Concrete repositories override this with an atomic implementation.
+        """
+        turns = await self.list_turns(tenant_id, user_id, session_id)
+        candidates = [
+            item for item in turns
+            if item.get("status") in {"queued", "running"}
+            and (request_id is None or item.get("idempotency_key") == request_id)
+        ]
+        if not candidates:
+            return None
+        turn = candidates[-1]
+        return await self.update_turn(
+            tenant_id,
+            user_id,
+            session_id,
+            turn["turn_id"],
+            {
+                "cancel_requested": True,
+                "cancel_requested_at": _now(),
+                **({"status": "interrupted"} if turn.get("status") == "queued" else {}),
+            },
+        )
+
+    async def turn_cancel_requested(
+        self,
+        tenant_id: str,
+        user_id: str,
+        session_id: str,
+        turn_id: str,
+    ) -> bool:
+        turn = await self.get_turn(tenant_id, user_id, session_id, turn_id)
+        return bool(turn and turn.get("cancel_requested"))
+
+    async def recover_stale_turns(self, stale_before: str) -> int:
+        """Mark abandoned queued/running turns interrupted at startup."""
+        return 0
 
 
 class MemoryRepository(_RepositoryMixin):
@@ -229,6 +278,47 @@ class MemoryRepository(_RepositoryMixin):
                     created_at=previous["created_at"],
                 )
             return copy.deepcopy(created)
+
+    async def request_turn_cancel(self, tenant_id: str, user_id: str, session_id: str, request_id: str | None = None) -> dict[str, Any] | None:
+        _require_scope(tenant_id, user_id)
+        async with self._data_lock:
+            candidates = [
+                (key, value)
+                for key, value in self._tables["turns"].items()
+                if key[0] == tenant_id
+                and key[1] == user_id
+                and value.get("session_id") == session_id
+                and value.get("status") in {"queued", "running"}
+                and (request_id is None or value.get("idempotency_key") == request_id)
+            ]
+            if not candidates:
+                return None
+            key, current = sorted(candidates, key=lambda item: item[1]["created_at"])[-1]
+            payload = {
+                **current["data"],
+                "cancel_requested": True,
+                "cancel_requested_at": _now(),
+                **({"status": "interrupted"} if current.get("status") == "queued" else {}),
+            }
+            updated = _record("turns", tenant_id, user_id, key[2], payload, version=current["version"] + 1, created_at=current["created_at"])
+            self._tables["turns"][key] = updated
+            return copy.deepcopy(updated)
+
+    async def recover_stale_turns(self, stale_before: str) -> int:
+        cutoff = datetime.fromisoformat(stale_before.replace("Z", "+00:00"))
+        recovered = 0
+        async with self._data_lock:
+            for key, current in list(self._tables["turns"].items()):
+                if current.get("status") not in {"queued", "running"}:
+                    continue
+                stamp = current.get("heartbeat_at") or current.get("execution_started_at") or current["created_at"]
+                observed = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+                if observed >= cutoff:
+                    continue
+                payload = {**current["data"], "status": "interrupted", "recovery_reason": "stale_turn", "recovered_at": _now()}
+                self._tables["turns"][key] = _record("turns", key[0], key[1], key[2], payload, version=current["version"] + 1, created_at=current["created_at"])
+                recovered += 1
+        return recovered
 
     @asynccontextmanager
     async def session_lock(self, tenant_id: str, user_id: str, session_id: str, *, timeout: float | None = None) -> AsyncIterator["MemoryRepository"]:
@@ -310,17 +400,53 @@ class PostgresRepository(_RepositoryMixin):
         return [self._decode(table, row) or {} for row in await asyncio.to_thread(run)]
 
     async def _update(self, table: str, tenant_id: str, user_id: str, record_id: str, patch: Mapping[str, Any]) -> dict[str, Any] | None:
-        current = await self._get(table, tenant_id, user_id, record_id)
-        if current is None:
-            return None
-        data = {**current["data"], **dict(patch)}
-        query = f"UPDATE {self.schema}.{table} SET data=%s::jsonb,version=version+1,updated_at=now() WHERE tenant_id=%s AND user_id=%s AND record_id=%s RETURNING record_id,data,tenant_id,user_id,version,created_at"  # noqa: S608
+        _require_scope(tenant_id, user_id)
+        query = f"UPDATE {self.schema}.{table} SET data=data || %s::jsonb,version=version+1,updated_at=now() WHERE tenant_id=%s AND user_id=%s AND record_id=%s RETURNING record_id,data,tenant_id,user_id,version,created_at"  # noqa: S608
 
         def run():
             with self._connect() as connection:
-                return connection.execute(query, (json.dumps(data, default=str), tenant_id, user_id, record_id)).fetchone()
+                return connection.execute(query, (json.dumps(dict(patch), default=str), tenant_id, user_id, record_id)).fetchone()
 
         return self._decode(table, await asyncio.to_thread(run))
+
+    async def create_turn(self, tenant_id: str, user_id: str, session_id: str, turn_id: str | None = None, *, idempotency_key: str | None = None, request_hash: str | None = None, data: Mapping[str, Any] | None = None, **fields: Any) -> dict[str, Any]:
+        """Create an idempotent turn without a cross-instance check/insert race."""
+        _require_scope(tenant_id, user_id)
+        record_id = turn_id or uuid.uuid4().hex
+        payload = {**dict(data or {}), **fields, "session_id": session_id, "idempotency_key": idempotency_key, "request_hash": request_hash}
+        insert = f"INSERT INTO {self.schema}.turns (tenant_id,user_id,record_id,data) VALUES (%s,%s,%s,%s::jsonb) ON CONFLICT DO NOTHING RETURNING record_id,data,tenant_id,user_id,version,created_at"  # noqa: S608
+        lookup = f"SELECT record_id,data,tenant_id,user_id,version,created_at FROM {self.schema}.turns WHERE tenant_id=%s AND user_id=%s AND data->>'session_id'=%s AND data->>'idempotency_key'=%s"  # noqa: S608
+
+        def run():
+            with self._connect() as connection:
+                row = connection.execute(
+                    insert,
+                    (tenant_id, user_id, record_id, json.dumps(payload, default=str)),
+                ).fetchone()
+                if row is not None:
+                    return row, True
+                if not idempotency_key:
+                    raise OfficeStorageError("turn record already exists")
+                return (
+                    connection.execute(
+                        lookup,
+                        (tenant_id, user_id, session_id, idempotency_key),
+                    ).fetchone(),
+                    False,
+                )
+
+        row, created = await asyncio.to_thread(run)
+        result = self._decode("turns", row)
+        if result is None:
+            raise OfficeStorageError("turn could not be created")
+        if result.get("request_hash") != request_hash:
+            raise IdempotencyConflict("request id reused with different payload")
+        # A conflicting INSERT returns the already-claimed row. Let the API
+        # layer translate it to an in-progress conflict (or replay a result
+        # that completed between lookup and this check).
+        if not created:
+            raise OfficeStorageError("turn already exists")
+        return result
 
     async def create_artifact(self, tenant_id: str, user_id: str, artifact_id: str | None = None, *, supersedes_artifact_id: str | None = None, data: Mapping[str, Any] | None = None, **fields: Any) -> dict[str, Any]:
         """Append a version under a PostgreSQL row lock."""
@@ -356,6 +482,62 @@ class PostgresRepository(_RepositoryMixin):
                 ).fetchone()
 
         return self._decode("artifacts", await asyncio.to_thread(run)) or {}
+
+    async def request_turn_cancel(self, tenant_id: str, user_id: str, session_id: str, request_id: str | None = None) -> dict[str, Any] | None:
+        _require_scope(tenant_id, user_id)
+        request_filter = "AND data->>'idempotency_key'=%s" if request_id is not None else ""
+        query = f"""
+            WITH target AS (
+                SELECT record_id FROM {self.schema}.turns
+                WHERE tenant_id=%s AND user_id=%s
+                  AND data->>'session_id'=%s
+                  AND data->>'status' IN ('queued','running')
+                  {request_filter}
+                ORDER BY updated_at DESC, record_id DESC
+                LIMIT 1
+                FOR UPDATE
+            )
+            UPDATE {self.schema}.turns AS turns
+            SET data=turns.data || %s::jsonb ||
+                CASE WHEN turns.data->>'status'='queued'
+                     THEN '{{"status":"interrupted"}}'::jsonb
+                     ELSE '{{}}'::jsonb END,
+                version=turns.version+1,
+                updated_at=now()
+            FROM target
+            WHERE turns.tenant_id=%s AND turns.user_id=%s AND turns.record_id=target.record_id
+            RETURNING turns.record_id,turns.data,turns.tenant_id,turns.user_id,turns.version,turns.created_at
+        """  # noqa: S608
+        prefix: tuple[Any, ...] = (tenant_id, user_id, session_id)
+        if request_id is not None:
+            prefix += (request_id,)
+        params = (*prefix, json.dumps({"cancel_requested": True, "cancel_requested_at": _now()}), tenant_id, user_id)
+
+        def run():
+            with self._connect() as connection:
+                return connection.execute(query, params).fetchone()
+
+        return self._decode("turns", await asyncio.to_thread(run))
+
+    async def recover_stale_turns(self, stale_before: str) -> int:
+        query = f"""
+            UPDATE {self.schema}.turns
+            SET data=data || %s::jsonb, version=version+1, updated_at=now()
+            WHERE data->>'status' IN ('queued','running')
+              AND COALESCE(
+                    NULLIF(data->>'heartbeat_at','')::timestamptz,
+                    NULLIF(data->>'execution_started_at','')::timestamptz,
+                    created_at
+                  ) < %s::timestamptz
+        """  # noqa: S608
+        patch = json.dumps({"status": "interrupted", "recovery_reason": "stale_turn", "recovered_at": _now()})
+
+        def run() -> int:
+            with self._connect() as connection:
+                cursor = connection.execute(query, (patch, stale_before))
+                return int(cursor.rowcount or 0)
+
+        return await asyncio.to_thread(run)
 
     @asynccontextmanager
     async def session_lock(self, tenant_id: str, user_id: str, session_id: str, *, timeout: float | None = None) -> AsyncIterator["PostgresRepository"]:
@@ -398,6 +580,21 @@ class MemoryObjectStore:
         async with self._lock:
             version = version_id or self._latest.get((tenant_id, user_id, key))
             return self._values.get((tenant_id, user_id, key, version)) if version else None
+
+    async def delete(self, tenant_id: str, user_id: str, key: str, *, version_id: str | None = None) -> None:
+        _require_scope(tenant_id, user_id)
+        async with self._lock:
+            latest_key = (tenant_id, user_id, key)
+            version = version_id or self._latest.get(latest_key)
+            if version is None:
+                return
+            self._values.pop((tenant_id, user_id, key, version), None)
+            if self._latest.get(latest_key) == version:
+                remaining = [item[3] for item in self._values if item[:3] == latest_key]
+                if remaining:
+                    self._latest[latest_key] = remaining[-1]
+                else:
+                    self._latest.pop(latest_key, None)
 
 
 class S3ObjectStore:
@@ -451,6 +648,14 @@ class S3ObjectStore:
             return await asyncio.to_thread(body.read)
         finally:
             await asyncio.to_thread(body.close)
+
+    async def delete(self, tenant_id: str, user_id: str, key: str, *, version_id: str | None = None) -> None:
+        _require_scope(tenant_id, user_id)
+        client = await self._get_client()
+        params = {"Bucket": self.bucket, "Key": self._key(tenant_id, user_id, key)}
+        if version_id:
+            params["VersionId"] = version_id
+        await asyncio.to_thread(client.delete_object, **params)
 
     async def close(self) -> None:
         if self._client is not None and hasattr(self._client, "close"):

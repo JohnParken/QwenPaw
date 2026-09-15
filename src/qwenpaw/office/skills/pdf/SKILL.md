@@ -9,3 +9,6 @@ Read, extract, create, split, merge, and validate PDF files. Report page and
 text extraction limitations explicitly, especially for scanned pages. The
 validator parses the file when a PDF parser is installed and never treats a
 header alone as proof of a usable document.
+
+本政策的权威原生来源是 `src/qwenpaw/agents/skills/pdf-zh/SKILL.md`；运行
+目录、脚本与完整操作说明均以该原生来源为准。

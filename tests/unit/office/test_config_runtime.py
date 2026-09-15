@@ -5,7 +5,17 @@ import pytest
 from qwenpaw.office.config import OfficeSettings
 from qwenpaw.office.bundle import SKILL_NAMES, load_bundle
 from qwenpaw.office.models import validate_identifier
-from qwenpaw.office.runtime import OfficeAgentBuilder, OfficeAppServices, OfficeRuntimeHost
+from qwenpaw.office.runtime import (
+    OfficeAgentBuilder,
+    OfficeAppServices,
+    OfficeRuntimeHost,
+    OfficeWorkspace,
+    _OfficeSessionAdapter,
+    _tenant_id,
+    _user_id,
+)
+from qwenpaw.office.storage import MemoryRepository
+from qwenpaw.hooks.session.session_hook import SessionLoadHook, SessionSaveHook
 from qwenpaw.runtime.builder import AgentBuilder
 from qwenpaw.runtime.runtime import Runtime
 
@@ -29,6 +39,35 @@ def test_office_host_uses_native_runtime_chain(tmp_path: Path) -> None:
     assert isinstance(host.runtime, Runtime)
     assert host.runtime.builder_factory is OfficeAgentBuilder
     assert issubclass(OfficeAgentBuilder, AgentBuilder)
+
+
+def test_office_workspace_registers_native_session_hooks(tmp_path: Path) -> None:
+    hooks = OfficeWorkspace(tmp_path).plugins.hook_registry._by_phase
+    registered = {hook.name for phase_hooks in hooks.values() for hook in phase_hooks}
+    assert {SessionLoadHook.name, SessionSaveHook.name} <= registered
+
+
+@pytest.mark.asyncio
+async def test_session_adapter_is_tenant_and_user_scoped() -> None:
+    repository = MemoryRepository()
+    await repository.create_session("tenant-a", "user-a", "session-1", data={"runtime_state": {"value": "a"}})
+    await repository.create_session("tenant-b", "user-a", "session-1", data={"runtime_state": {"value": "b"}})
+    adapter = _OfficeSessionAdapter(repository)
+    tenant_token = _tenant_id.set("tenant-a")
+    user_token = _user_id.set("user-a")
+    try:
+        loaded = type("State", (), {"data": {}})()
+        await adapter.load_session_state(session_id="session-1", user_id="user-a", agent=loaded)
+        assert loaded.data == {"value": "a"}
+        loaded.data = {"value": "saved"}
+        await adapter.save_session_state(session_id="session-1", user_id="user-a", agent=loaded)
+        record = await repository.get_session("tenant-a", "user-a", "session-1")
+        assert record["data"]["runtime_state"] == {"value": "saved"}
+        other = await repository.get_session("tenant-b", "user-a", "session-1")
+        assert other["data"]["runtime_state"] == {"value": "b"}
+    finally:
+        _tenant_id.reset(tenant_token)
+        _user_id.reset(user_token)
 
 
 @pytest.mark.asyncio

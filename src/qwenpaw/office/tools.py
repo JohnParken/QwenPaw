@@ -528,10 +528,14 @@ def run_skill_script(
     allowed = {_canonical_command(item) for item in context.allowed_commands}
     if command not in allowed:
         raise SkillScriptDenied("COMMAND_NOT_ALLOWED")
-    script_index, _ = _entrypoint_from_argv(context, args)
+    script_index, entrypoint = _entrypoint_from_argv(context, args)
     if command == "python" and script_index is None and "-c" not in args and "-m" not in args:
         raise SkillScriptDenied("ENTRYPOINT_NOT_REGISTERED")
     actual = list(args)
+    if script_index is not None and entrypoint is not None:
+        # Entrypoints are resolved against the immutable Skill directory;
+        # the subprocess cwd remains the request work directory.
+        actual[script_index] = str(context.skill_dir / entrypoint)
     if command == "python" and Path(actual[0]).name.lower() in {"python", "python3"}:
         actual[0] = sys.executable
     if Path(actual[0]).is_absolute() and command != "python":

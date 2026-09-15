@@ -13,6 +13,7 @@ import importlib.util
 import json
 from pathlib import Path
 import shutil
+from types import MappingProxyType
 from typing import Any, Iterable, Iterator, Mapping
 
 
@@ -27,6 +28,7 @@ SKILL_NAMES = (
 BUNDLE_LOCK_NAME = "bundle.lock.json"
 BUNDLE_SCHEMA_VERSION = 1
 _SHA256_LENGTH = 64
+_NATIVE_SOURCE_SKILLS = frozenset({"docx", "xlsx", "pptx", "pdf"})
 OFFICE_TOOL_NAMES = frozenset({
     "list_files", "read_file", "read_text", "write_file", "write_text",
     "copy_file", "create_docx", "create_xlsx", "create_pptx", "create_pdf",
@@ -334,6 +336,15 @@ class SkillBundle(Mapping[str, BuiltinSkill]):
     def ready(self) -> bool:
         return self.validation.valid and all(skill.available for skill in self.skills.values())
 
+    @property
+    def runtime_skill_directories(self) -> Mapping[str, Path]:
+        """Return the immutable directory used to load each runtime Skill."""
+        return MappingProxyType({
+            name: skill.directory
+            for name, skill in self.items()
+            if skill.directory is not None
+        })
+
     def values(self):  # type: ignore[no-untyped-def]
         return (self.skills[name] for name in SKILL_NAMES)
 
@@ -377,19 +388,43 @@ def _iter_regular_files(directory: Path) -> Iterator[Path]:
             raise BundleIntegrityError(f"unsupported bundle entry: {path}")
 
 
+def _update_directory_digest(
+    digest: "hashlib._Hash",
+    directory: Path,
+    *,
+    prefix: str = "",
+) -> None:
+    for path in _iter_regular_files(directory):
+        relative = path.relative_to(directory).as_posix()
+        if prefix:
+            relative = f"{prefix}/{relative}"
+        encoded_relative = relative.encode("utf-8")
+        data = path.read_bytes()
+        digest.update(len(encoded_relative).to_bytes(8, "big"))
+        digest.update(encoded_relative)
+        digest.update(len(data).to_bytes(8, "big"))
+        digest.update(data)
+
+
 def directory_digest(directory: str | Path) -> str:
     """Compute a deterministic SHA-256 over relative names and file bytes."""
     directory = Path(directory)
     if not directory.is_dir() or directory.is_symlink():
         raise BundleIntegrityError(f"not a regular skill directory: {directory}")
     digest = hashlib.sha256()
-    for path in _iter_regular_files(directory):
-        relative = path.relative_to(directory).as_posix().encode("utf-8")
-        data = path.read_bytes()
-        digest.update(len(relative).to_bytes(8, "big"))
-        digest.update(relative)
-        digest.update(len(data).to_bytes(8, "big"))
-        digest.update(data)
+    _update_directory_digest(digest, directory)
+    return digest.hexdigest()
+
+
+def _skill_digest(policy_directory: Path, runtime_directory: Path) -> str:
+    """Digest policy metadata and the distinct runtime source exactly once."""
+    policy_directory = policy_directory.resolve(strict=True)
+    runtime_directory = runtime_directory.resolve(strict=True)
+    if policy_directory == runtime_directory:
+        return directory_digest(policy_directory)
+    digest = hashlib.sha256()
+    _update_directory_digest(digest, policy_directory, prefix="policy")
+    _update_directory_digest(digest, runtime_directory, prefix="runtime")
     return digest.hexdigest()
 
 
@@ -441,6 +476,68 @@ def _load_manifest(skill_dir: Path, name: str) -> SkillManifest:
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise BundleIntegrityError(f"invalid manifest for {name}: {exc}") from exc
     return SkillManifest.from_dict(value, skill_name=name)
+
+
+def _native_source_root() -> Path:
+    """Return the packaged source directory for native Office skills."""
+    return Path(__file__).resolve().parent.parent / "agents" / "skills"
+
+
+def _native_source_reference(manifest: SkillManifest) -> str | None:
+    """Read the explicit native source reference from a policy manifest."""
+    for key in ("native_source", "source_dir", "source"):
+        value = manifest.metadata.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _validated_native_source(candidate: Path, name: str) -> Path:
+    """Validate one native source candidate without permitting escapes."""
+    if candidate.name == "SKILL.md":
+        candidate = candidate.parent
+    native_root = _native_source_root()
+    if not _path_is_safe(native_root, candidate):
+        raise BundleIntegrityError(f"native source path is unsafe: {name}")
+    resolved = candidate.resolve(strict=True)
+    if resolved.name != f"{name}-zh":
+        raise BundleIntegrityError(f"native source name mismatch: {name}")
+    if not resolved.is_dir() or resolved.is_symlink():
+        raise BundleIntegrityError(f"native source is not a directory: {name}")
+    return resolved
+
+
+def _runtime_skill_directory(
+    root: Path,
+    policy_dir: Path,
+    name: str,
+    manifest: SkillManifest,
+) -> Path:
+    """Resolve the immutable runtime tree, keeping local policies separate."""
+    if name not in _NATIVE_SOURCE_SKILLS:
+        return policy_dir
+
+    reference = _native_source_reference(manifest)
+    candidates: list[Path] = []
+    if reference:
+        raw = Path(reference)
+        if raw.is_absolute():
+            candidates.append(raw)
+        else:
+            if reference.startswith("src/"):
+                candidates.append(Path(__file__).resolve().parents[3] / raw)
+            candidates.extend((policy_dir / raw, root / raw))
+        for candidate in candidates:
+            if candidate.exists():
+                return _validated_native_source(candidate, name)
+
+    # A copied policy bundle may not retain the repository-relative source
+    # reference.  Resolve that case against the packaged native tree while
+    # retaining the same name and containment checks above.
+    return _validated_native_source(
+        _native_source_root() / f"{name}-zh",
+        name,
+    )
 
 
 def _probe_dependencies(directory: Path, manifest: SkillManifest) -> DependencyReadiness:
@@ -516,18 +613,41 @@ def _discover(root: Path) -> BundleValidation:
 
     for name in SKILL_NAMES:
         directory: Path | None = None
+        runtime_directory: Path | None = None
         try:
             directory = _find_skill_dir(root, name)
             manifest = _load_manifest(directory, name)
-            skill_digest = directory_digest(directory)
+            # Policies are local to this bundle, while the four Office
+            # document skills execute from their immutable native sources.
+            # Walk the policy tree for symlink/encoding safety even though
+            # its digest is intentionally not the runtime digest.
+            for _ in _iter_regular_files(directory):
+                pass
+            policy_md = directory / "SKILL.md"
+            if not policy_md.is_file() or policy_md.is_symlink():
+                raise BundleIntegrityError(f"SKILL.md is missing for skill: {name}")
+            policy_md.read_text(encoding="utf-8")
+            runtime_directory = _runtime_skill_directory(
+                root,
+                directory,
+                name,
+                manifest,
+            )
+            skill_digest = _skill_digest(directory, runtime_directory)
             if lock is not None and lock.skills.get(name) != skill_digest:
                 raise BundleIntegrityError(f"digest mismatch for skill: {name}")
-            skill_md = directory / "SKILL.md"
+            skill_md = runtime_directory / "SKILL.md"
             if not skill_md.is_file() or skill_md.is_symlink():
                 raise BundleIntegrityError(f"SKILL.md is missing for skill: {name}")
             skill_md.read_text(encoding="utf-8")
-            readiness = _probe_dependencies(directory, manifest)
-            skills[name] = BuiltinSkill(name, directory, manifest, skill_digest, readiness)
+            readiness = _probe_dependencies(runtime_directory, manifest)
+            skills[name] = BuiltinSkill(
+                name,
+                runtime_directory,
+                manifest,
+                skill_digest,
+                readiness,
+            )
         except (BundleError, OSError, UnicodeDecodeError) as exc:
             errors.append(str(exc))
             fallback = SkillManifest(name, name, "0.0.0")

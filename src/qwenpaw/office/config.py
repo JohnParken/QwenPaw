@@ -32,6 +32,12 @@ class OfficeSettings:
     work_root: Path = field(default_factory=lambda: Path(tempfile.gettempdir()) / "qwenpaw-office")
     skill_bundle_path: Path = field(default_factory=lambda: Path(__file__).with_name("skills"))
     max_upload_bytes: int = 50 * 1024 * 1024
+    max_mounted_artifacts: int = 16
+    max_history_messages: int = 100
+    max_history_tokens: int = 24_000
+    summary_max_chars: int = 8_000
+    turn_stale_seconds: int = 300
+    cancel_poll_seconds: float = 0.5
     allowed_providers: tuple[str, ...] = ("openai", "tlprovider")
     default_provider: str = "openai"
     openai_model: str = "gpt-4.1-mini"
@@ -63,6 +69,12 @@ class OfficeSettings:
             work_root=Path(os.environ.get(prefix + "WORK_ROOT", str(Path(tempfile.gettempdir()) / "qwenpaw-office"))),
             skill_bundle_path=Path(os.environ.get(prefix + "SKILL_BUNDLE_PATH", str(Path(__file__).with_name("skills")))),
             max_upload_bytes=int(os.environ.get(prefix + "MAX_UPLOAD_BYTES", str(50 * 1024 * 1024))),
+            max_mounted_artifacts=int(os.environ.get(prefix + "MAX_MOUNTED_ARTIFACTS", "16")),
+            max_history_messages=int(os.environ.get(prefix + "MAX_HISTORY_MESSAGES", "100")),
+            max_history_tokens=int(os.environ.get(prefix + "MAX_HISTORY_TOKENS", "24000")),
+            summary_max_chars=int(os.environ.get(prefix + "SUMMARY_MAX_CHARS", "8000")),
+            turn_stale_seconds=int(os.environ.get(prefix + "TURN_STALE_SECONDS", "300")),
+            cancel_poll_seconds=float(os.environ.get(prefix + "CANCEL_POLL_SECONDS", "0.5")),
             allowed_providers=providers,
             default_provider=os.environ.get(prefix + "DEFAULT_PROVIDER", "openai").lower(),
             openai_model=os.environ.get(prefix + "OPENAI_MODEL", "gpt-4.1-mini"),
@@ -88,6 +100,14 @@ class OfficeSettings:
             failures.append("OpenAI API key is not configured")
         if self.default_provider == "tlprovider" and not self.tl_base_url:
             failures.append("TLProvider base URL is not configured")
+        if self.max_mounted_artifacts <= 0:
+            failures.append("max mounted artifacts must be positive")
+        if self.max_history_messages <= 0 or self.max_history_tokens <= 0:
+            failures.append("history limits must be positive")
+        if self.summary_max_chars <= 0:
+            failures.append("summary limit must be positive")
+        if self.turn_stale_seconds <= 0 or self.cancel_poll_seconds <= 0:
+            failures.append("turn recovery settings must be positive")
         return failures
 
 

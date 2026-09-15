@@ -1,12 +1,21 @@
 {
   "id": "pdf",
   "name": "pdf",
-  "version": "1.0.0",
+  "version": "1.1",
   "description": "Read, extract, create, transform, and validate PDF files.",
-  "entrypoints": [],
+  "entrypoints": [
+    "scripts/check_bounding_boxes.py",
+    "scripts/check_fillable_fields.py",
+    "scripts/convert_pdf_to_images.py",
+    "scripts/create_validation_image.py",
+    "scripts/extract_form_field_info.py",
+    "scripts/extract_form_structure.py",
+    "scripts/fill_fillable_fields.py",
+    "scripts/fill_pdf_form_with_annotations.py"
+  ],
   "python_packages": ["pypdf", "pdfplumber", "reportlab"],
   "node_packages": [],
-  "allowed_commands": [],
+  "allowed_commands": ["python"],
   "allowed_tools": ["list_files", "read_file", "write_file", "copy_file", "create_pdf", "read_pdf", "publish_artifact", "run_skill_script"],
   "supported_mime_types": ["application/pdf"],
   "output_patterns": ["*.pdf"],
@@ -14,5 +23,9 @@
   "network": "disabled",
   "timeout_seconds": 120,
   "max_output_bytes": 65536,
-  "metadata": {"builtin": true, "required_commands": ["pdftoppm"]}
+  "metadata": {
+    "builtin": true,
+    "native_source": "src/qwenpaw/agents/skills/pdf-zh",
+    "required_commands": ["pdftoppm"]
+  }
 }

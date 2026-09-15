@@ -55,8 +55,64 @@ def test_locked_bundle_has_exact_six_skills_and_matching_digests():
         skill = bundle[name]
         assert skill.directory is not None
         assert (skill.directory / "SKILL.md").is_file()
-        assert (skill.directory / "manifest.json").is_file()
-        assert skill.digest == directory_digest(skill.directory)
+        assert (bundle.root / name / "manifest.json").is_file()
+        assert skill.digest == bundle.lock.skills[name]
+        if name in {"writing", "bi-analysis"}:
+            assert skill.digest == directory_digest(skill.directory)
+
+
+def test_document_skills_use_explicit_native_sources_and_entries():
+    bundle = load_bundle()
+    source_root = Path(__file__).resolve().parents[3] / "src" / "qwenpaw" / "agents" / "skills"
+    for name in ("docx", "xlsx", "pptx", "pdf"):
+        skill = bundle[name]
+        expected = (source_root / f"{name}-zh").resolve()
+        assert skill.directory == expected
+        assert skill.manifest.metadata["native_source"] == f"src/qwenpaw/agents/skills/{name}-zh"
+        assert skill.manifest.allowed_commands == ("python",)
+        assert skill.manifest.entrypoints
+        assert all((expected / entrypoint).is_file() for entrypoint in skill.manifest.entrypoints)
+        assert bundle.runtime_skill_directories[name] == expected
+
+
+def test_local_text_skills_expose_controlled_python_entries():
+    bundle = load_bundle()
+    for name in ("writing", "bi-analysis"):
+        skill = bundle[name]
+        assert skill.manifest.allowed_commands == ("python",)
+        assert skill.manifest.entrypoints
+        assert all((skill.directory / entrypoint).is_file() for entrypoint in skill.manifest.entrypoints)
+
+
+def test_local_text_skill_entrypoints_execute_through_controlled_runner(tmp_path: Path):
+    bundle = load_bundle()
+    writing = bundle["writing"]
+    writing_context = SkillExecutionContext(
+        tmp_path / "writing",
+        skill_name="writing",
+        skill_dir=writing.directory,
+        manifest=writing.manifest,
+    )
+    normalized = run_skill_script(
+        writing_context,
+        ["python", "scripts/normalize_text.py", "hello   office"],
+    )
+    assert normalized.ok and normalized.stdout.strip() == "hello office"
+
+    analysis = bundle["bi-analysis"]
+    analysis_context = SkillExecutionContext(
+        tmp_path / "analysis",
+        skill_name="bi-analysis",
+        skill_dir=analysis.directory,
+        manifest=analysis.manifest,
+    )
+    profile = run_skill_script(
+        analysis_context,
+        ["python", "scripts/profile_rows.py", '[{"region":"east","sales":1}]'],
+    )
+    assert profile.ok
+    assert '"columns": ["region", "sales"]' in profile.stdout
+    assert '"rows": 1' in profile.stdout
 
 
 def test_bundle_rejects_digest_changes_and_symlinks(tmp_path: Path):
@@ -65,6 +121,20 @@ def test_bundle_rejects_digest_changes_and_symlinks(tmp_path: Path):
     shutil.copytree(source, copied, symlinks=True)
     (copied / "writing" / "SKILL.md").write_text("changed", encoding="utf-8")
     assert not verify_bundle(copied).valid
+
+    copied = tmp_path / "manifest-skills"
+    shutil.copytree(source, copied, symlinks=True)
+    manifest = copied / "docx" / "manifest.json"
+    manifest.write_text(
+        manifest.read_text(encoding="utf-8").replace(
+            '"version": "1.1"',
+            '"version": "1.1-tampered"',
+        ),
+        encoding="utf-8",
+    )
+    result = verify_bundle(copied)
+    assert not result.valid
+    assert any("digest mismatch for skill: docx" in error for error in result.errors)
 
     copied = tmp_path / "symlink-skills"
     shutil.copytree(source, copied, symlinks=True)
@@ -88,6 +158,7 @@ def test_script_requires_whitelisted_command_and_registered_entrypoint(tmp_path:
     context, _ = _context(tmp_path)
     result = run_skill_script(context, [sys.executable, "scripts/emit.py", "done"])
     assert result.ok and result.stdout.strip() == "done"
+    assert Path(result.argv[1]).is_absolute()
     with pytest.raises(SkillScriptDenied, match="SHELL_COMMAND"):
         run_skill_script(context, ["sh", "-c", "echo escaped"])
     with pytest.raises((SkillScriptDenied, PathBoundaryError)):

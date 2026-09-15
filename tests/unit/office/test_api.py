@@ -1,6 +1,8 @@
 from collections.abc import Iterator
 import asyncio
+import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,6 +17,9 @@ from qwenpaw.office.storage import MemoryObjectStore, MemoryRepository
 
 class _Skill:
     available = True
+    manifest = SimpleNamespace(
+        allowed_tools=("list_files", "read_text", "write_text", "publish_artifact"),
+    )
 
     def as_dict(self):
         return {"ready": True, "available": True, "version": "1.0.0"}
@@ -25,8 +30,12 @@ class _Bundle(dict):
 
 
 class _Runtime:
+    def __init__(self) -> None:
+        self.histories: list[list[dict[str, str]]] = []
+
     async def stream(self, **kwargs):
         history = kwargs["history"]
+        self.histories.append(list(history))
         prefix = "follow-up: " if history else ""
         yield RuntimeSignal("message.delta", {"delta": prefix + "done"})
         yield RuntimeSignal("runtime.response", {"usage": {"input_tokens": 1}})
@@ -34,6 +43,41 @@ class _Runtime:
 
 class _SlowRuntime:
     async def stream(self, **_kwargs):
+        yield RuntimeSignal("message.delta", {"delta": "working"})
+        await asyncio.Event().wait()
+
+
+class _ArtifactRevisionRuntime:
+    def __init__(self) -> None:
+        self.service: OfficeService | None = None
+
+    async def stream(self, **kwargs):
+        assert self.service is not None
+        ctx = SimpleNamespace(request=SimpleNamespace(request_context={**kwargs, "work_dir": str(kwargs["work_dir"])}))
+        tools = {tool.__name__: tool for tool in self.service._build_tools(ctx)}
+        index_path = kwargs["work_dir"] / "input" / "artifacts" / "index.json"
+        mounted = json.loads(index_path.read_text(encoding="utf-8"))
+        if mounted:
+            tools["write_text"]("output/report.md", "# Version 2")
+            tools["publish_artifact"](
+                "output/report.md",
+                "Report",
+                "text/markdown",
+                mounted[0]["artifact_id"],
+            )
+        else:
+            tools["write_text"]("output/report.md", "# Version 1")
+            tools["publish_artifact"]("output/report.md", "Report", "text/markdown")
+        yield RuntimeSignal("message.delta", {"delta": "done"})
+        yield RuntimeSignal("runtime.response", {"usage": {}})
+
+
+class _CoordinatedSlowRuntime:
+    def __init__(self) -> None:
+        self.started = asyncio.Event()
+
+    async def stream(self, **_kwargs):
+        self.started.set()
         yield RuntimeSignal("message.delta", {"delta": "working"})
         await asyncio.Event().wait()
 
@@ -117,3 +161,80 @@ async def test_closing_event_stream_marks_turn_interrupted(tmp_path: Path) -> No
         started.turn_id,
     )
     assert turn is not None and turn["status"] == "interrupted"
+
+
+def test_artifacts_are_auto_mounted_and_revisions_are_immutable(tmp_path: Path) -> None:
+    settings = OfficeSettings(work_root=tmp_path, openai_api_key="test")
+    bundle = _Bundle({name: _Skill() for name in ("writing", "docx", "xlsx", "pptx", "pdf", "bi-analysis")})
+    runtime = _ArtifactRevisionRuntime()
+    repository = MemoryRepository()
+    service = OfficeService(settings, bundle, repository=repository, object_store=MemoryObjectStore(), runtime_host=runtime)
+    runtime.service = service
+    with TestClient(create_app(settings, service=service)) as client:
+        session_id = client.post("/api/v1/sessions", headers=_headers(), json={"metadata": {}}).json()["session_id"]
+        first = client.post(
+            f"/api/v1/sessions/{session_id}/messages",
+            headers=_headers("revision-1"),
+            json={"content": "create"},
+        ).json()["artifacts"][0]
+        second = client.post(
+            f"/api/v1/sessions/{session_id}/messages",
+            headers=_headers("revision-2"),
+            json={"content": "revise"},
+        ).json()["artifacts"][0]
+        assert second["artifact_version"] == 2
+        assert second["supersedes_artifact_id"] == first["artifact_id"]
+        listing = client.get(f"/api/v1/sessions/{session_id}/artifacts", headers=_headers("list")).json()
+        old = next(item for item in listing if item["artifact_id"] == first["artifact_id"])
+        assert old["superseded_by"] == second["artifact_id"]
+
+
+@pytest.mark.asyncio
+async def test_cancel_is_observed_across_service_instances(tmp_path: Path) -> None:
+    settings = OfficeSettings(work_root=tmp_path, openai_api_key="test", cancel_poll_seconds=0.01)
+    bundle = _Bundle({name: _Skill() for name in ("writing", "docx", "xlsx", "pptx", "pdf", "bi-analysis")})
+    repository = MemoryRepository()
+    object_store = MemoryObjectStore()
+    runtime = _CoordinatedSlowRuntime()
+    first = OfficeService(settings, bundle, repository=repository, object_store=object_store, runtime_host=runtime)
+    second = OfficeService(settings, bundle, repository=repository, object_store=object_store, runtime_host=_Runtime())
+    identity = RequestIdentity("tenant-a", "user-a", "cross-instance")
+    session = await first.create_session(identity, {})
+
+    async def consume() -> None:
+        async for _ in first.message_events(identity, session["session_id"], MessageCreate(content="wait")):
+            pass
+
+    task = asyncio.create_task(consume())
+    await asyncio.wait_for(runtime.started.wait(), timeout=1)
+    assert await second.cancel(identity, session["session_id"], identity.request_id)
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    turns = await repository.list_turns(identity.tenant_id, identity.user_id, session["session_id"])
+    assert turns[0]["status"] == "interrupted"
+
+
+@pytest.mark.asyncio
+async def test_history_uses_persisted_rolling_summary_and_token_budget(tmp_path: Path) -> None:
+    settings = OfficeSettings(
+        work_root=tmp_path,
+        openai_api_key="test",
+        max_history_messages=2,
+        max_history_tokens=16,
+        summary_max_chars=200,
+    )
+    bundle = _Bundle({name: _Skill() for name in ("writing", "docx", "xlsx", "pptx", "pdf", "bi-analysis")})
+    repository = MemoryRepository()
+    runtime = _Runtime()
+    service = OfficeService(settings, bundle, repository=repository, object_store=MemoryObjectStore(), runtime_host=runtime)
+    identity = RequestIdentity("tenant-a", "user-a", "summary-request")
+    session = await service.create_session(identity, {})
+    for index in range(4):
+        turn_identity = RequestIdentity(identity.tenant_id, identity.user_id, f"summary-{index}")
+        async for _ in service.message_events(turn_identity, session["session_id"], MessageCreate(content="long office request " + str(index))):
+            pass
+    stored = await repository.get_session(identity.tenant_id, identity.user_id, session["session_id"])
+    assert stored and stored["conversation_summary"]
+    assert stored["summary_through_message_id"]
+    assert runtime.histories[-1][0]["role"] == "system"
+    assert "Conversation summary" in runtime.histories[-1][0]["content"]

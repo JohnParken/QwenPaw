@@ -1,12 +1,18 @@
 {
   "id": "docx",
   "name": "docx",
-  "version": "1.0.0",
+  "version": "1.1",
   "description": "Create, inspect, edit, and validate DOCX documents.",
-  "entrypoints": [],
+  "entrypoints": [
+    "scripts/accept_changes.py",
+    "scripts/comment.py",
+    "scripts/office/pack.py",
+    "scripts/office/unpack.py",
+    "scripts/office/validate.py"
+  ],
   "python_packages": ["docx"],
   "node_packages": [],
-  "allowed_commands": [],
+  "allowed_commands": ["python"],
   "allowed_tools": ["list_files", "read_file", "write_file", "copy_file", "create_docx", "read_docx", "publish_artifact", "run_skill_script"],
   "supported_mime_types": ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
   "output_patterns": ["*.docx"],
@@ -14,5 +20,9 @@
   "network": "disabled",
   "timeout_seconds": 120,
   "max_output_bytes": 65536,
-  "metadata": {"builtin": true, "required_commands": ["libreoffice", "pdftoppm"]}
+  "metadata": {
+    "builtin": true,
+    "native_source": "src/qwenpaw/agents/skills/docx-zh",
+    "required_commands": ["libreoffice", "pdftoppm"]
+  }
 }

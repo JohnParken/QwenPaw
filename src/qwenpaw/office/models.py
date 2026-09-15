@@ -39,12 +39,18 @@ class SessionCreate(BaseModel):
 class MessageCreate(BaseModel):
     content: str = Field(min_length=1, max_length=1_000_000)
     file_ids: list[str] = Field(default_factory=list, max_length=64)
+    artifact_ids: list[str] = Field(default_factory=list, max_length=64)
     provider: Literal["openai", "tlprovider"] | None = None
 
     @field_validator("file_ids")
     @classmethod
     def validate_file_ids(cls, values: list[str]) -> list[str]:
         return [validate_identifier(value, "file_id") for value in values]
+
+    @field_validator("artifact_ids")
+    @classmethod
+    def validate_artifact_ids(cls, values: list[str]) -> list[str]:
+        return [validate_identifier(value, "artifact_id") for value in values]
 
 
 class CancelRequest(BaseModel):
