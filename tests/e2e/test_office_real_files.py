@@ -101,7 +101,11 @@ class _PublishingRuntime:
 
 @pytest.mark.e2e
 def test_trusted_bff_can_publish_and_download_artifact(tmp_path: Path) -> None:
-    settings = OfficeSettings(work_root=tmp_path, openai_api_key="test")
+    settings = OfficeSettings(
+        work_root=tmp_path,
+        openai_api_key="test",
+        tl_base_url="http://tl.test",
+    )
     runtime = _PublishingRuntime()
     service = OfficeService(
         settings,

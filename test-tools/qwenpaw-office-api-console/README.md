@@ -8,9 +8,12 @@
 先启动 Office API：
 
 ```bash
-export QWENPAW_OFFICE_OPENAI_API_KEY='your-key'
+export QWENPAW_OFFICE_TL_BASE_URL='https://your-tl-endpoint'
 .venv/bin/qwenpaw-office
 ```
+
+Office defaults to `tlprovider`; set `QWENPAW_OFFICE_DEFAULT_PROVIDER=openai`
+and `QWENPAW_OFFICE_OPENAI_API_KEY='your-key'` to use OpenAI instead.
 
 默认使用内存存储，适合单机测试。然后启动测试控制台：
 

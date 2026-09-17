@@ -33,7 +33,7 @@ class OfficeSettings:
     skill_bundle_path: Path = field(default_factory=lambda: Path(__file__).with_name("skills"))
     max_upload_bytes: int = 50 * 1024 * 1024
     allowed_providers: tuple[str, ...] = ("openai", "tlprovider")
-    default_provider: str = "openai"
+    default_provider: str = "tlprovider"
     openai_model: str = "gpt-4.1-mini"
     openai_base_url: str = "https://api.openai.com/v1"
     openai_api_key: str = ""
@@ -64,7 +64,7 @@ class OfficeSettings:
             skill_bundle_path=Path(os.environ.get(prefix + "SKILL_BUNDLE_PATH", str(Path(__file__).with_name("skills")))),
             max_upload_bytes=int(os.environ.get(prefix + "MAX_UPLOAD_BYTES", str(50 * 1024 * 1024))),
             allowed_providers=providers,
-            default_provider=os.environ.get(prefix + "DEFAULT_PROVIDER", "openai").lower(),
+            default_provider=os.environ.get(prefix + "DEFAULT_PROVIDER", "tlprovider").lower(),
             openai_model=os.environ.get(prefix + "OPENAI_MODEL", "gpt-4.1-mini"),
             openai_base_url=os.environ.get(prefix + "OPENAI_BASE_URL", "https://api.openai.com/v1"),
             openai_api_key=os.environ.get(prefix + "OPENAI_API_KEY", ""),

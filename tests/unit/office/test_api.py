@@ -43,7 +43,7 @@ def _headers(request_id: str = "request-1", tenant: str = "tenant-a", user: str 
 
 
 def _client(tmp_path: Path) -> Iterator[TestClient]:
-    settings = OfficeSettings(work_root=tmp_path, openai_api_key="test")
+    settings = OfficeSettings(work_root=tmp_path, openai_api_key="test", tl_base_url="http://tl.test")
     bundle = _Bundle({name: _Skill() for name in ("writing", "docx", "xlsx", "pptx", "pdf", "bi-analysis")})
     service = OfficeService(settings, bundle, repository=MemoryRepository(), object_store=MemoryObjectStore(), runtime_host=_Runtime())
     with TestClient(create_app(settings, service=service)) as client:
@@ -90,7 +90,7 @@ def test_sse_and_header_validation(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_closing_event_stream_marks_turn_interrupted(tmp_path: Path) -> None:
-    settings = OfficeSettings(work_root=tmp_path, openai_api_key="test")
+    settings = OfficeSettings(work_root=tmp_path, openai_api_key="test", tl_base_url="http://tl.test")
     bundle = _Bundle({name: _Skill() for name in ("writing", "docx", "xlsx", "pptx", "pdf", "bi-analysis")})
     repository = MemoryRepository()
     service = OfficeService(

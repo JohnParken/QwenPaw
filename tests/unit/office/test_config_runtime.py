@@ -17,6 +17,14 @@ def test_identifier_contract() -> None:
             validate_identifier(value)
 
 
+def test_office_defaults_to_tlprovider_and_allows_provider_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("QWENPAW_OFFICE_DEFAULT_PROVIDER", raising=False)
+    assert OfficeSettings().default_provider == "tlprovider"
+
+    monkeypatch.setenv("QWENPAW_OFFICE_DEFAULT_PROVIDER", "openai")
+    assert OfficeSettings.from_env().default_provider == "openai"
+
+
 def test_production_requires_postgres_and_s3(tmp_path: Path) -> None:
     settings = OfficeSettings(production=True, work_root=tmp_path, skill_bundle_path=tmp_path / "skills", openai_api_key="test")
     failures = settings.static_readiness()
