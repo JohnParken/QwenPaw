@@ -2040,8 +2040,14 @@ async def test_failed_discovery_preserves_last_cache_and_user_models(
     assert [model.id for model in provider.extra_models] == ["user-only"]
     assert {model.id for model in result.models} >= {"cached-remote"}
     assert "user-only" not in {model.id for model in result.models}
-    assert caplog.records[-1].getMessage() == (
-        "Model discovery failed; using static fallback"
+    warning = next(
+        record
+        for record in caplog.records
+        if "Model discovery failed" in record.getMessage()
+    )
+    assert warning.getMessage() == (
+        "Model discovery failed for provider=openai; using static fallback: "
+        "model discovery timed out"
     )
 
 

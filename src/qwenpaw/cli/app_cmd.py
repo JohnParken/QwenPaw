@@ -12,7 +12,12 @@ from ..browser.control_link.chrome.protocol import NM_MAX_INBOUND_BYTES
 from ..config.utils import write_last_api
 from ..constant import LOG_LEVEL_ENV
 from ..utils.http import is_loopback_host, probe_host_for_bind_host
-from ..utils.logging import SuppressPathAccessLogFilter, setup_logger
+from ..utils.logging import (
+    LOG_FILE_PATH,
+    SuppressPathAccessLogFilter,
+    add_project_file_handler,
+    setup_logger,
+)
 from ..utils.platform import warn_unelevated_sandbox
 
 logger = logging.getLogger(__name__)
@@ -65,6 +70,18 @@ def configure_server_process(
         os.environ["QWENPAW_RELOAD_MODE"] = "1"
 
     setup_logger(log_level)
+    # Attach the file handler before uvicorn imports the application so
+    # import-time and early-startup failures are available for diagnosis.
+    add_project_file_handler(LOG_FILE_PATH)
+    logger.info(
+        "startup event=server_configured pid=%s bind=%s log_level=%s "
+        "reload=%s log_file=%s",
+        os.getpid(),
+        _format_bind_address(host, port),
+        log_level,
+        reload,
+        LOG_FILE_PATH,
+    )
     if log_level in ("debug", "trace"):
         from .main import log_init_timings
 

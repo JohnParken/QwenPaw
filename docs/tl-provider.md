@@ -8,7 +8,7 @@ TL proxy。无需为公司直连启动 TypeScript 服务。
 
 ### TL 协议调试日志
 
-`qwenpaw app --log-level debug` 会在 QwenPaw 终端及工作目录的 `qwenpaw.log`
+`qwenpaw app --log-level debug` 会在 QwenPaw 终端及工作目录的 `logs/qwenpaw.log`
 记录 `TL_WIRE` 日志：init/chat 请求正文、HTTP 状态、非流式响应正文和完整 SSE
 事件（包括解析失败的完整事件）。使用 attempt_id、request_id、session_id 关联请求。
 不记录认证头；已配置凭证和常见敏感字段会脱敏。单条 payload 超过 32768 字符会

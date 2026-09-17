@@ -366,7 +366,7 @@ Visual Compact 更适合长时间持续的对话、频繁使用工具的任务�
 
 - **如何查看**
   1. 将环境变量 `QWENPAW_LOG_LEVEL` 设为 `debug`，然后重启 QwenPaw。
-  2. 完成一次较长的请求后，打开工作目录下的 `qwenpaw.log`（也可以使用 `/daemon logs`），搜索 `Visual Compact transform`。
+  2. 完成一次较长的请求后，打开工作目录下的 `logs/qwenpaw.log`（也可以使用 `/daemon logs`），搜索 `Visual Compact transform`。
   3. `applied=true` 表示本次请求实际应用了视觉压缩；`estimated_saved_tokens` 和 `estimated_savings_pct` 分别表示预计节省的 Token 数量和比例。
 - **需要注意**
   - 这些数值根据本地 Token 与图片开销估算得出，不是 Provider 返回的精确用量或计费结果。

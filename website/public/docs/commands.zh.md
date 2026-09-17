@@ -918,7 +918,7 @@ Use `/model openai:gpt-4o` to switch to this model.
 | `/daemon restart` 或 `/restart`     | 零停机重载（对话中）；终端中打印说明                                         | ✅   | ✅   |
 | `/daemon reload-config`             | 重新读取并校验配置文件                                                       | ✅   | ✅   |
 | `/daemon version`                   | 版本号、工作目录与日志路径                                                   | ✅   | ✅   |
-| `/daemon logs` 或 `/daemon logs 50` | 查看最近 N 行日志（默认 100 行，最大 2000 行，来自工作目录下 `qwenpaw.log`） | ✅   | ✅   |
+| `/daemon logs` 或 `/daemon logs 50` | 查看最近 N 行日志（默认 100 行，最大 2000 行，来自工作目录下 `logs/qwenpaw.log`） | ✅   | ✅   |
 | `/approval approve [request_id]`    | 批准待审的工具调用（无 ID 则批准队首）                                       | ✅   | ❌   |
 | `/approval deny [request_id]`       | 拒绝待审的工具调用，可附理由                                                 | ✅   | ❌   |
 | `/approval list`                    | 列出所有待审批请求                                                           | ✅   | ❌   |
@@ -999,7 +999,7 @@ qwenpaw daemon version       # 在终端
 
 ### `/daemon logs` - 查看日志
 
-查看工作目录下 `qwenpaw.log` 的最近 N 行日志。默认 100 行，最大 2000 行。
+查看工作目录下 `logs/qwenpaw.log` 的最近 N 行日志。默认 100 行，最大 2000 行。
 
 **用法：**
 

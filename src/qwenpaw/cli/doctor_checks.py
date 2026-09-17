@@ -55,7 +55,8 @@ from ..utils.system_info import summarize_python_environment
 from ..providers.provider import Provider
 
 # Log file opened on app startup (see ``qwenpaw.app._app`` lifespan).
-APP_LOG_BASENAME = LOG_FILE_BASENAME
+# Kept as a relative name for tests and callers that join it to WORKING_DIR.
+APP_LOG_BASENAME = str(Path("logs") / LOG_FILE_BASENAME)
 
 # Built-in local llama.cpp provider id; legacy configs may still use
 # copaw-local.
@@ -101,11 +102,14 @@ def check_app_log_writable() -> tuple[bool, str]:
 
     parent = log_path.parent
     if not parent.is_dir():
-        return (
-            False,
-            f"log directory does not exist: {parent} "
-            "(required when starting `qwenpaw app`)",
-        )
+        anchor = _resolve_existing_path_anchor(parent)
+        if anchor is not None and os.access(anchor, os.W_OK | os.X_OK):
+            return (
+                True,
+                f"{log_path} (log directory will be created under writable "
+                f"ancestor {anchor})",
+            )
+        return False, f"log directory cannot be created: {parent}"
     if os.access(parent, os.W_OK | os.X_OK):
         return (
             True,

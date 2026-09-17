@@ -394,7 +394,7 @@ def main() -> None:
 
     from qwenpaw.constant import LOG_LEVEL_ENV, WORKING_DIR
 
-    install_sidecar_logging(WORKING_DIR / "desktop.log")
+    install_sidecar_logging(WORKING_DIR / "logs" / "desktop.log")
     _install_certifi_env()
 
     # Auto-initialize if no config exists

@@ -101,11 +101,11 @@ class TestCheckAppLogWritable:
         assert ok is False
         assert "cannot write" in msg
 
-    def test_parent_missing(self, fake_working_dir, monkeypatch):
+    def test_parent_missing_but_creatable(self, fake_working_dir, monkeypatch):
         monkeypatch.setattr(dc, "APP_LOG_BASENAME", "subdir/app.log")
         ok, msg = dc.check_app_log_writable()
-        assert ok is False
-        assert "directory does not exist" in msg
+        assert ok is True
+        assert "will be created" in msg
 
     def test_parent_writable_no_file(self, fake_working_dir, monkeypatch):
         monkeypatch.setattr(dc, "APP_LOG_BASENAME", "fresh.log")

@@ -3,6 +3,7 @@
 import asyncio
 import hmac
 import inspect
+import logging
 import mimetypes
 import os
 import sys
@@ -136,6 +137,15 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
 ):
     startup_start_time = time.time()
     add_project_file_handler(LOG_FILE_PATH)
+    logger.info(
+        "startup event=lifespan_begin version=%s pid=%s working_dir=%s "
+        "log_file=%s log_level=%s",
+        __version__,
+        os.getpid(),
+        WORKING_DIR,
+        LOG_FILE_PATH,
+        logging.getLevelName(logger.getEffectiveLevel()),
+    )
 
     # ================================================================
     # Fast synchronous setup (target < 100ms)

@@ -24,14 +24,18 @@ _LEVEL_MAP = {
     "warning": logging.WARNING,
     "info": logging.INFO,
     "debug": logging.DEBUG,
+    # Python has no built-in TRACE level; treat the CLI's trace option as
+    # debug so users still get the most detailed application audit trail.
+    "trace": logging.DEBUG,
 }
 
 # Top-level name for this package; only loggers under this name are shown.
 LOG_NAMESPACE = PROJECT_NAME.lower()
 
-# Canonical log file name and path — import these instead of reconstructing.
+# Canonical log directory/file path — import these instead of reconstructing.
 LOG_FILE_BASENAME = f"{LOG_NAMESPACE}.log"
-LOG_FILE_PATH = WORKING_DIR / LOG_FILE_BASENAME
+LOG_DIR = WORKING_DIR / "logs"
+LOG_FILE_PATH = LOG_DIR / LOG_FILE_BASENAME
 
 _LOG_SIZE_PATTERN = re.compile(r"^\s*(\d+)\s*([kmgt]?i?b?)?\s*$", re.I)
 _LOG_SIZE_FACTORS = {
@@ -276,7 +280,7 @@ def _attach_logger_file_handler(
     """Attach a shared file handler to another logger namespace.
 
     Keeps ``propagate`` enabled so records still reach the root logger
-    (stderr / journald) while also being written to ``qwenpaw.log``.
+    (stderr / journald) while also being written to ``logs/qwenpaw.log``.
     """
     target = logging.getLogger(logger_name)
     target.setLevel(level)

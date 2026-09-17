@@ -369,7 +369,7 @@ Visual Compact is most useful for long-running conversations, tool-heavy tasks, 
 
 - **How to check**
   1. Set the `QWENPAW_LOG_LEVEL` environment variable to `debug`, then restart QwenPaw.
-  2. After completing a long request, open `qwenpaw.log` in the working directory (or use `/daemon logs`) and search for `Visual Compact transform`.
+  2. After completing a long request, open `logs/qwenpaw.log` in the working directory (or use `/daemon logs`) and search for `Visual Compact transform`.
   3. `applied=true` means visual compression was applied to that request. `estimated_saved_tokens` and `estimated_savings_pct` show the estimated number and percentage of tokens saved.
 - **Keep in mind**
   - These values are calculated from local token and image-cost estimates. They are not exact usage or billing totals reported by the provider.

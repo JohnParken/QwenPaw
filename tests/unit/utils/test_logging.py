@@ -14,6 +14,8 @@ import pytest
 
 from qwenpaw.utils.logging import (
     ColorFormatter,
+    LOG_DIR,
+    LOG_FILE_PATH,
     SuppressPathAccessLogFilter,
     add_project_file_handler,
     sanitize_log_value,
@@ -38,6 +40,7 @@ class TestLevelMap:
     def test_level_map_contains_all_levels(self):
         """S级: _LEVEL_MAP must have standard log levels."""
         assert "debug" in _LEVEL_MAP
+        assert "trace" in _LEVEL_MAP
         assert "info" in _LEVEL_MAP
         assert "warning" in _LEVEL_MAP
         assert "error" in _LEVEL_MAP
@@ -313,3 +316,7 @@ class TestLogConstants:
         # Get the logger that setup_logger would configure
         logger = logging.getLogger(LOG_NAMESPACE)
         assert logger.name == "qwenpaw"
+
+    def test_default_log_file_is_under_logs_directory(self):
+        assert LOG_DIR.name == "logs"
+        assert LOG_FILE_PATH == LOG_DIR / "qwenpaw.log"

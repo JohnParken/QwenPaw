@@ -118,6 +118,17 @@ class ToolCoordinator:
         async with self._entries_lock:
             self._entries[ctx.tool_call_id] = entry
 
+        self._log_event(
+            entry,
+            "start",
+            timeout=self._resolve_timeout(
+                agent_id,
+                tool_call.name,
+                deadline_override,
+            ),
+            param_keys=tuple(sorted(_parse_tool_input(tool_call))),
+        )
+
         chunk_queue: asyncio.Queue[Any] = asyncio.Queue()
         entry.stream.add_subscriber(chunk_queue)
 
@@ -138,6 +149,7 @@ class ToolCoordinator:
                 elif event.type == "stream_closed":
                     break
                 elif event.type == "deadline_reached":
+                    self._log_event(entry, "timeout", phase="foreground")
                     if (
                         self._offload_on_deadline
                         or ctx.offload_reason == OffloadReason.USER
@@ -165,12 +177,22 @@ class ToolCoordinator:
                         terminal = "completed"
                         break
                 elif event.type == "kill_deadline_reached":
+                    self._log_event(entry, "timeout", phase="kill_deadline")
                     ctx.cancel_event.set()
                     ctx.cancel_reason = CancelReason.TIMEOUT
                     await self._await_grace_or_force_cancel(entry)
                     terminal = "completed"
                     break
                 elif event.type == "cancelled":
+                    self._log_event(
+                        entry,
+                        "cancel",
+                        reason=(
+                            ctx.cancel_reason.value
+                            if ctx.cancel_reason
+                            else "unknown"
+                        ),
+                    )
                     await self._await_grace_or_force_cancel(entry)
                     terminal = "completed"
                     break
@@ -203,6 +225,12 @@ class ToolCoordinator:
         ctx = entry.ctx
         if ctx.cancel_reason is None:
             ctx.cancel_reason = CancelReason.USER
+        self._log_event(
+            entry,
+            "cancel",
+            reason=ctx.cancel_reason.value,
+            source="parent",
+        )
         ctx.cancel_event.set()
         await self._await_grace_or_force_cancel(entry)
         if entry.background_task is not None:
@@ -271,6 +299,15 @@ class ToolCoordinator:
         ctx = entry.ctx
         entry.status = ToolCallStatus.OFFLOADED
         ctx.offload_deadline = None
+        self._log_event(
+            entry,
+            "offload",
+            reason=(
+                ctx.offload_reason.value
+                if ctx.offload_reason
+                else "unknown"
+            ),
+        )
 
         asyncio.create_task(
             self._supervise(entry, background_result_processor),
@@ -430,6 +467,12 @@ class ToolCoordinator:
         if entry is None:
             return False
         entry.ctx.cancel_reason = reason
+        self._log_event(
+            entry,
+            "cancel",
+            reason=reason.value,
+            force=force,
+        )
         if force:
             # Always signal cancel_event before task.cancel() so platforms
             # that bridge cancel → process kill (e.g. Windows host shell)
@@ -572,6 +615,12 @@ class ToolCoordinator:
         for entry in entries:
             entry.ctx.cancel_event.set()
             entry.ctx.cancel_reason = CancelReason.SHUTDOWN
+            self._log_event(
+                entry,
+                "cancel",
+                reason=CancelReason.SHUTDOWN.value,
+                source="shutdown",
+            )
         for entry in entries:
             if entry.background_task and not entry.background_task.done():
                 try:
@@ -741,6 +790,7 @@ class ToolCoordinator:
         token = set_call_context(entry.ctx)
         try:
             if hooks.before:
+                self._log_event(entry, "hook", phase="before", state="start")
                 try:
                     modified = await hooks.before(
                         _parse_tool_input(tool_call),
@@ -748,7 +798,19 @@ class ToolCoordinator:
                     )
                     if modified is not None:
                         _update_tool_input(tool_call, modified)
+                    self._log_event(
+                        entry,
+                        "hook",
+                        phase="before",
+                        state="complete",
+                    )
                 except Exception as exc:
+                    self._log_event(
+                        entry,
+                        "hook",
+                        phase="before",
+                        state="error",
+                    )
                     logger.warning(
                         "before_call failed: %s",
                         exc,
@@ -784,15 +846,28 @@ class ToolCoordinator:
             await self._drain(next_handler, tool_call, entry)
 
             if hooks.after:
+                self._log_event(entry, "hook", phase="after", state="start")
                 try:
                     resp = await asyncio.shield(
                         hooks.after(entry.final_response, entry.ctx),
                     )
                     if resp is not None:
                         entry.final_response = resp
+                    self._log_event(
+                        entry,
+                        "hook",
+                        phase="after",
+                        state="complete",
+                    )
                 except asyncio.CancelledError:
                     pass
                 except Exception as exc:
+                    self._log_event(
+                        entry,
+                        "hook",
+                        phase="after",
+                        state="error",
+                    )
                     logger.warning(
                         "after_call failed: %s",
                         exc,
@@ -913,6 +988,7 @@ class ToolCoordinator:
         if entry.background_task is None or entry.background_task.done():
             return
         entry.force_cancelled = True
+        self._log_event(entry, "force-cancel")
         entry.background_task.cancel()
 
     @staticmethod
@@ -947,7 +1023,32 @@ class ToolCoordinator:
             )
         self._entries.pop(entry.ctx.tool_call_id, None)
         self._store_completed(entry)
+        self._log_event(
+            entry,
+            "final",
+            status=entry.status.value,
+            end_state=entry.end_state,
+        )
         return entry.final_response
+
+    @staticmethod
+    def _log_event(entry: ToolCallEntry, event: str, **fields: Any) -> None:
+        """Emit lifecycle metadata without logging tool input or output."""
+        elapsed = max(0.0, time.monotonic() - entry.ctx.started_at)
+        details = {
+            "tool": entry.ctx.tool_name,
+            "id": entry.ctx.tool_call_id,
+            "session": entry.ctx.session_id,
+            "agent": entry.ctx.agent_id,
+            "root_session": entry.ctx.root_session_id,
+            "elapsed": round(elapsed, 6),
+            **fields,
+        }
+        logger.debug(
+            "tool-call event=%s %s",
+            event,
+            " ".join(f"{key}={value!r}" for key, value in details.items()),
+        )
 
     @staticmethod
     def _cancel_message_for_llm(ctx: ToolCallContext) -> str:

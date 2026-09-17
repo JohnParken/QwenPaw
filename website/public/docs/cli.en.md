@@ -94,7 +94,7 @@ the app is not running).
 | `qwenpaw daemon restart`       | Print instructions (in-chat /daemon restart does in-process reload)                       |
 | `qwenpaw daemon reload-config` | Re-read and validate config (channel/MCP changes need /daemon restart or process restart) |
 | `qwenpaw daemon version`       | Version and paths                                                                         |
-| `qwenpaw daemon logs [-n N]`   | Last N lines of log (default 100; from `qwenpaw.log` in working dir)                      |
+| `qwenpaw daemon logs [-n N]`   | Last N lines of log (default 100; from `logs/qwenpaw.log` in working dir)                 |
 
 **Multi-Agent Support:** All commands support the `--agent-id` parameter (defaults to `default`).
 

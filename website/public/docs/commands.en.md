@@ -919,7 +919,7 @@ Send `/daemon <subcommand>` or short names (e.g., `/status`) in chat, or run `qw
 | `/daemon restart` or `/restart`     | Zero-downtime reload (chat); prints instructions (terminal)                               | ✅   | ✅       |
 | `/daemon reload-config`             | Re-read and validate configuration file                                                   | ✅   | ✅       |
 | `/daemon version`                   | Version number, working directory, and log path                                           | ✅   | ✅       |
-| `/daemon logs` or `/daemon logs 50` | View last N lines of log (default 100, max 2000, from `qwenpaw.log` in working directory) | ✅   | ✅       |
+| `/daemon logs` or `/daemon logs 50` | View last N lines of log (default 100, max 2000, from `logs/qwenpaw.log` in working directory) | ✅   | ✅       |
 | `/approval approve [request_id]`    | Approve pending tool execution (or queue head if no ID)                                   | ✅   | ❌       |
 | `/approval deny [request_id]`       | Deny pending tool execution with optional reason                                          | ✅   | ❌       |
 | `/approval list`                    | List all pending approval requests                                                        | ✅   | ❌       |
@@ -1000,7 +1000,7 @@ qwenpaw daemon version       # From terminal
 
 ### /daemon logs - View Logs
 
-View the last N lines of `qwenpaw.log` in the working directory. Default 100 lines, maximum 2000 lines.
+View the last N lines of `logs/qwenpaw.log` in the working directory. Default 100 lines, maximum 2000 lines.
 
 **Usage:**
 

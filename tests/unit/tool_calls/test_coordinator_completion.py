@@ -305,6 +305,47 @@ async def test_after_hook_transforms_final_response_and_blocks_caller():
 
 
 @pytest.mark.asyncio
+async def test_lifecycle_logs_metadata_without_tool_input_values(caplog):
+    coordinator = ToolCoordinator()
+    tool_call = _ToolCall(
+        id="call-log",
+        name="logged_tool",
+        input={"secret": "do-not-log", "count": 3},
+    )
+
+    async def next_handler(
+        tool_call: _ToolCall,
+    ) -> AsyncGenerator[Any, None]:
+        yield _text_response(tool_call.id, "ok")
+
+    with caplog.at_level(
+        logging.DEBUG,
+        logger="qwenpaw.tool_calls._coordinator",
+    ):
+        await _collect(
+            coordinator.execute(
+                tool_call=tool_call,
+                next_handler=next_handler,
+                session_id="session-log",
+                agent_id="agent-log",
+                root_session_id="root-log",
+            ),
+        )
+
+    messages = [record.getMessage() for record in caplog.records]
+    lifecycle = [
+        message for message in messages if "tool-call event=" in message
+    ]
+    assert any("event=start" in message for message in lifecycle)
+    assert any(
+        "event=final" in message and "status='completed'" in message
+        for message in lifecycle
+    )
+    assert "do-not-log" not in "\n".join(lifecycle)
+    assert "tool='logged_tool'" in "\n".join(lifecycle)
+
+
+@pytest.mark.asyncio
 async def test_middleware_caller_observes_coordinator_response():
     coordinator = ToolCoordinator()
     middleware = ToolCoordinatorMiddleware(
