@@ -72,6 +72,7 @@ class QwenPawLocalWorkspace(AgentScopeLocalWorkspace):
         active_modes: tuple[str, ...] | set[str] = (),
         active_skills: tuple[str, ...] | set[str] = (),
         enabled_features: tuple[str, ...] | set[str] = (),
+        governor: Any = None,
     ) -> list[Any]:
         """Return QwenPaw tools, replacing AgentScope built-ins.
 
@@ -120,7 +121,7 @@ class QwenPawLocalWorkspace(AgentScopeLocalWorkspace):
         return [
             PolicyGuardedTool(
                 d.func,
-                governor=self._governor,
+                governor=governor if governor is not None else self._governor,
                 request_context=request_context,
             )
             for d in descs

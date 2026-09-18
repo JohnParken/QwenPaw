@@ -38,9 +38,12 @@ export function getTestConnectionFailureDetail(
 }
 
 export function getLocalizedTestConnectionMessage(
-  result: Pick<TestConnectionResponse, "success" | "message">,
+  result: Pick<TestConnectionResponse, "success" | "message" | "verification">,
   t: TFunction,
 ): string {
+  if (result.success && result.verification === "provider_only") {
+    return t("models.testProviderInitializationSuccess");
+  }
   if (result.success) {
     return t("models.testConnectionSuccess");
   }

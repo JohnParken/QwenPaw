@@ -8,15 +8,41 @@ from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Literal, Type
 
 from agentscope.formatter import FormatterBase
+from agentscope.message import Msg, TextBlock
 from agentscope.model import ChatModelBase
 from agentscope.model._model_response import ChatResponse
 
 from ..config.config import AgentsLLMRoutingConfig
+from ..providers.tl_utils import is_tl_formatter
 
 logger = logging.getLogger(__name__)
 
 
 Route = Literal["local", "cloud"]
+
+
+def _extract_user_text(message: Msg | dict[str, Any]) -> str:
+    """Read user text from SDK blocks or legacy dictionary messages."""
+    if isinstance(message, dict):
+        role, content = message.get("role"), message.get("content")
+    else:
+        role, content = message.role, message.content
+    if role != "user":
+        return ""
+    if isinstance(content, str):
+        return content
+    parts: list[str] = []
+    for block in content if isinstance(content, list) else []:
+        if isinstance(block, TextBlock):
+            parts.append(block.text)
+        elif isinstance(block, dict) and block.get("type") in {
+            "text",
+            "text/plain",
+        }:
+            text = block.get("text")
+            if isinstance(text, str):
+                parts.append(text)
+    return " ".join(parts)
 
 
 @dataclass
@@ -87,9 +113,40 @@ class RoutingChatModel(ChatModelBase):
         self.routing_cfg = routing_cfg
         self.policy = RoutingPolicy(routing_cfg)
 
+    @property
+    def formatter(self):
+        endpoint = (
+            self.local_endpoint
+            if self.policy.decide().route == "local"
+            else self.cloud_endpoint
+        )
+        return endpoint.formatter
+
+    async def count_tokens(self, messages, tools=None):
+        endpoint = (
+            self.local_endpoint
+            if self.policy.decide().route == "local"
+            else self.cloud_endpoint
+        )
+        if is_tl_formatter(endpoint.formatter):
+            return await endpoint.model.count_tokens(messages, tools)
+        return await super().count_tokens(messages, tools)
+
+    async def generate_structured_output(
+        self, messages, structured_model, **kwargs
+    ):
+        endpoint = (
+            self.local_endpoint
+            if self.policy.decide().route == "local"
+            else self.cloud_endpoint
+        )
+        return await endpoint.model.generate_structured_output(
+            messages, structured_model, **kwargs
+        )
+
     async def __call__(
         self,
-        messages: list[dict],
+        messages: list[Msg | dict[str, Any]],
         tools: list[dict] | None = None,
         tool_choice: Literal["auto", "none", "required"] | str | None = None,
         **kwargs: Any,
@@ -97,12 +154,7 @@ class RoutingChatModel(ChatModelBase):
         # agentscope 2.0 doesn't pass ``structured_model`` through ``__call__``
         # (it goes via ``generate_structured_output``); drop any 1.x leftover.
         kwargs.pop("structured_model", None)
-        text = " ".join(
-            message["content"]
-            for message in messages
-            if message.get("role") == "user"
-            and isinstance(message.get("content"), str)
-        )
+        text = " ".join(filter(None, map(_extract_user_text, messages)))
         decision = self.policy.decide(
             text=text,
             tools_available=tools is not None,

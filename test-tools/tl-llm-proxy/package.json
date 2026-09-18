@@ -1,0 +1,22 @@
+{
+  "name": "tl-llm-proxy-test",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Independent test-only TL text proxy; not a QwenPaw production dependency",
+  "type": "module",
+  "engines": { "node": "^22.22.1 || >=24" },
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "types": "./dist/index.d.ts",
+  "bin": { "tl-llm-proxy": "./dist/cli.js" },
+  "files": ["dist", "README.md", ".env.example"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/cli.js",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "test:live": "npm run build && node test/live.mjs",
+    "test:package": "npm run build && node test/package-smoke.mjs",
+    "prepack": "npm run build"
+  },
+  "devDependencies": { "@types/node": "22.15.30", "typescript": "5.8.3" }
+}

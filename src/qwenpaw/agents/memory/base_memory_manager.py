@@ -58,6 +58,7 @@ class MemoryBackendContext:
     backend_config: Mapping[str, Any]
     language: str = "zh"
     token_estimate_divisor: float = 4.0
+    user_id: str | None = None
 
 
 class BaseMemoryManager(ABC):

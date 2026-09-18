@@ -465,3 +465,10 @@ def isolated_secret_dir(monkeypatch, tmp_path):
         None,
     )
     return secret_dir
+
+
+@pytest.fixture(autouse=True)
+def isolated_provider_defaults(monkeypatch, tmp_path):
+    """Keep startup TL defaults and environment overrides out of user files."""
+    monkeypatch.setattr(_provider_manager_module, "WORKING_DIR", tmp_path / "work")
+    monkeypatch.delenv("QWENPAW_PROVIDER_CONFIG", raising=False)

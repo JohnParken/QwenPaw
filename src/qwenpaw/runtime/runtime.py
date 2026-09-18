@@ -44,9 +44,11 @@ class Runtime:
         *,
         workspace: Any,
         app_services: Any,
+        builder: Any = None,
     ) -> None:
         self.workspace = workspace
         self.app_services = app_services
+        self._builder = builder
 
     async def run(  # pylint: disable=too-many-branches,too-many-statements
         self,
@@ -101,7 +103,7 @@ class Runtime:
 
             if not skip_agent:
                 # --- [fixed 2] build agent ---
-                builder = AgentBuilder(
+                builder = self._builder or AgentBuilder(
                     app_services=self.app_services,
                 )
                 ctx.agent = await builder.build(ctx)
@@ -510,6 +512,8 @@ class Runtime:
             workspace_dir=workspace_dir,
             workspace=self.workspace,
             app_services=self.app_services,
+            user_id=getattr(request, "user_id", "") or "",
+            run_id=(getattr(request, "request_context", None) or {}).get("run_id", ""),
             input_msgs=_request_input_to_msgs(request.input),
         )
 

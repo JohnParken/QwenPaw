@@ -150,6 +150,7 @@ class AgentBuilder:
                 active_modes=active_modes or (),
                 active_skills=effective_skills,
                 enabled_features=enabled_features or (),
+                governor=governor,
             )
         else:
             tools = []
@@ -418,12 +419,7 @@ class AgentBuilder:
             _extra_project_dirs,
         )
 
-        # Inject governor into local_workspace so list_tools() can
-        # wrap tools with PolicyGuardedTool.
-        local_ws = self._get_local_workspace(ctx) if ctx else None
-        if local_ws is not None:
-            local_ws.set_governor(governor)
-
+        # list_tools receives this request's governor directly.
         # Toolkit.
         from ..agents.context.visual_compression.runtime.recovery import (
             TurnRecoveryStore,

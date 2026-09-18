@@ -45,7 +45,8 @@ dependencies = [
     "pyyaml>=6.0",
     "wcmatch>=10.0",
     "json-repair>=0.30.0",
-    "jsonschema>=4.0.0",
+    "jsonschema>=4.18.0",
+    "referencing>=0.30.0",
     "segno>=1.6.6",
     "modelscope>=1.35.0",
     "huggingface_hub>=0.20.0",
@@ -111,6 +112,7 @@ include-package-data = true
     "providers/data/**",
     "docs/*.md",
     "app/channels/yuanbao/proto/**",
+    "server/migrations/*.sql",
 ]
 
 [build-system]
@@ -128,6 +130,14 @@ qwenpawmail-mcp = "qwenpawmail_mcp.__main__:main"
 # Legacy group "copaw.doctor" is still loaded when present.
 
 [project.optional-dependencies]
+server = [
+    "aiomysql>=0.2,<0.4",
+    "fastapi>=0.115,<1",
+    "psycopg[binary,pool]>=3.2,<4",
+    "redis>=5,<7",
+    "boto3>=1.35,<2",
+    "python-multipart>=0.0.20",
+]
 test = [
     "pytest>=8.3.5",
     "pytest-asyncio>=0.23.0",

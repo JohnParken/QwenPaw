@@ -68,6 +68,7 @@ export interface ProviderInfo {
   api_key: string;
   base_url: string;
   generate_kwargs: Record<string, unknown>;
+  tl_config?: TLConfig;
   /** Custom HTTP headers sent with every request to this provider. */
   custom_headers?: Record<string, string>;
   /** Authentication mode: 'api_key' (x-api-key) or 'auth_token' (Authorization: Bearer). */
@@ -111,12 +112,44 @@ export interface ProviderConfigRequest {
   generate_kwargs?: Record<string, unknown>;
   custom_headers?: Record<string, string>;
   auth_mode?: "api_key" | "auth_token";
+  tl_config?: TLConfig;
 }
+
+export interface TLConfig {
+  app_id: string;
+  tr_code: string;
+  tr_version: string;
+  system_prompt_variable_name: string;
+  tool_calling_mode: "system_prompt";
+  json_correction_max_attempts: 0 | 1;
+  timeout_seconds: number;
+  stream_idle_timeout_seconds: number;
+  max_request_bytes: number;
+  max_response_bytes: number;
+  max_wire_response_bytes: number;
+  max_sse_event_bytes: number;
+}
+
+export const DEFAULT_TL_CONFIG: TLConfig = {
+  app_id: "internal-demo",
+  tr_code: "agent-chat",
+  tr_version: "1.0",
+  system_prompt_variable_name: "system_prompt",
+  tool_calling_mode: "system_prompt",
+  json_correction_max_attempts: 1,
+  timeout_seconds: 150,
+  stream_idle_timeout_seconds: 0,
+  max_request_bytes: 1048576,
+  max_response_bytes: 4194304,
+  max_wire_response_bytes: 67108864,
+  max_sse_event_bytes: 1048576,
+};
 
 export type CustomChatModelName =
   | "OpenAIChatModel"
   | "OpenAIResponseModel"
-  | "AnthropicChatModel";
+  | "AnthropicChatModel"
+  | "TLChatModel";
 
 export interface ModelSlotConfig {
   provider_id: string;
@@ -151,6 +184,7 @@ export interface CreateCustomProviderRequest {
   api_key_prefix?: string;
   chat_model?: CustomChatModelName;
   models?: ModelInfo[];
+  tl_config?: TLConfig;
 }
 
 export interface AddModelRequest {
@@ -238,6 +272,7 @@ export interface StartLocalServerRequest {
 /* ---- Test Connection ---- */
 
 export interface TestConnectionResponse {
+  verification?: "live" | "provider_only" | "catalog" | "unverified" | null;
   success: boolean;
   message: string;
   status?: ModelAvailabilityStatus;
@@ -251,6 +286,7 @@ export interface TestProviderRequest {
   include_extended?: boolean;
   custom_headers?: Record<string, string>;
   auth_mode?: "api_key" | "auth_token";
+  tl_config?: TLConfig;
 }
 
 export interface DiscoverModelsRequest {

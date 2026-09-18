@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "enabled": true,
+  "providers": [
+    {
+      "id": "tlproxy",
+      "name": "TL Proxy",
+      "base_url": "http://127.0.0.1:8089",
+      "chat_model": "TLChatModel",
+      "is_custom": true,
+      "models": [
+        {
+          "id": "deepseek-v4-flash",
+          "name": "deepseek-v4-flash",
+          "max_input_length": 1048576,
+          "max_input_length_configured": true
+        }
+      ],
+      "tl_config": {
+        "app_id": "",
+        "tr_code": "",
+        "tr_version": "",
+        "system_prompt_variable_name": "system_prompt",
+        "tool_calling_mode": "system_prompt",
+        "json_correction_max_attempts": 1,
+        "timeout_seconds": 150.0,
+        "stream_idle_timeout_seconds": 0.0,
+        "max_request_bytes": 1048576,
+        "max_response_bytes": 4194304,
+        "max_wire_response_bytes": 67108864,
+        "max_sse_event_bytes": 1048576
+      }
+    }
+  ],
+  "active_model": {
+    "provider_id": "tlproxy",
+    "model": "deepseek-v4-flash"
+  }
+}

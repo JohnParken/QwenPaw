@@ -5,6 +5,7 @@
 event buffer. Reconnects get buffer replay + new events. Cleanup when task
 completes.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -22,6 +23,8 @@ from typing import (
     Optional,
 )
 
+from ..providers.tl_preview import PreviewQueue, drain_preview_events
+
 logger = logging.getLogger(__name__)
 
 _SENTINEL = None
@@ -32,12 +35,50 @@ _SENTINEL = None
 REPLAY_END_SSE = f"data: {json.dumps({'type': 'replay_end'})}\n\n"
 
 
+def _preview_payload(sse: Any) -> dict[str, Any] | None:
+    """Decode one local preview SSE line without accepting other events."""
+    if not isinstance(sse, str) or not sse.startswith("data:"):
+        return None
+    raw = sse[5:].strip()
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("type") not in {
+        "preview_start",
+        "preview_update",
+        "preview_clear",
+    }:
+        return None
+    return payload
+
+
+class _TrackedQueue(asyncio.Queue):
+    """Durable queue plus a bounded, live-only preview side channel."""
+
+    _PREVIEW_QUEUE_SIZE = 64
+
+    def __init__(self) -> None:
+        # Durable events retain the historical unbounded behavior. Only the
+        # ephemeral side channel has a bound and coalescing policy.
+        super().__init__()
+        self.preview_queue = PreviewQueue(
+            maxsize=self._PREVIEW_QUEUE_SIZE, decode=_preview_payload
+        )
+
+    def put_preview_nowait(self, sse: str) -> bool:
+        """Share the provider's bounded preview admission policy."""
+        return self.preview_queue.put_preview_nowait(sse)
+
+
 @dataclass
 class _RunState:
     """Per-run state (task, queues, buffer), guarded by tracker lock."""
 
     task: asyncio.Future
-    queues: list[asyncio.Queue] = field(default_factory=list)
+    queues: list[_TrackedQueue] = field(default_factory=list)
     buffer: list[str] = field(default_factory=list)
     start_time: Optional[datetime] = None
     finish_time: Optional[datetime] = None
@@ -48,9 +89,10 @@ class TaskTracker:
     """Per-agent tracker: run_key -> RunState.
 
     All mutations to _runs under _lock. Producer broadcasts under lock.
-    Subscribers use unbounded per-connection queues; disconnect removes them
-    via :meth:`detach_subscriber`. A workspace reload reuses the same tracker
-    so active runs remain reconnectable.
+    Durable subscribers retain unbounded per-connection queues; ephemeral
+    preview events use a separate bounded/coalescing side channel and are
+    never added to ``buffer``. Disconnect removes both channels via
+    :meth:`detach_subscriber`.
     """
 
     def __init__(self) -> None:
@@ -195,7 +237,7 @@ class TaskTracker:
             state = self._runs.get(run_key)
             if state is None or state.task.done():
                 return None
-            q: asyncio.Queue = asyncio.Queue()
+            q = _TrackedQueue()
             for sse in state.buffer:
                 q.put_nowait(sse)
             q.put_nowait(REPLAY_END_SSE)
@@ -265,13 +307,13 @@ class TaskTracker:
         async with self._lock:
             state = self._runs.get(run_key)
             if state is not None and not state.task.done():
-                q: asyncio.Queue = asyncio.Queue()
+                q = _TrackedQueue()
                 for sse in state.buffer:
                     q.put_nowait(sse)
                 state.queues.append(q)
                 return q, False
 
-            my_queue: asyncio.Queue = asyncio.Queue()
+            my_queue = _TrackedQueue()
             run = _RunState(
                 task=asyncio.Future(),  # placeholder, replaced below
                 queues=[my_queue],
@@ -298,9 +340,13 @@ class TaskTracker:
                         if tracker is None:
                             return
                         async with tracker.lock:
-                            run.buffer.append(sse)
-                            for q in run.queues:
-                                q.put_nowait(sse)
+                            if _preview_payload(sse) is not None:
+                                for q in run.queues:
+                                    q.put_preview_nowait(sse)
+                            else:
+                                run.buffer.append(sse)
+                                for q in run.queues:
+                                    q.put_nowait(sse)
                 except asyncio.CancelledError:
                     logger.debug("run cancelled run_key=%s", run_key)
                 except Exception:
@@ -347,19 +393,89 @@ class TaskTracker:
         queue: asyncio.Queue,
         run_key: str,
     ) -> AsyncGenerator[str, None]:
-        """Yield SSE strings from *queue* until the sentinel ``None``.
+        """Yield durable and live-only preview SSE strings until sentinel.
 
         Always detaches *queue* from *run_key* when this stream ends or is
         closed (including client disconnect), so reconnects do not leak queues.
         """
+        preview_queue = getattr(queue, "preview_queue", None)
+        if preview_queue is None:
+            try:
+                while True:
+                    try:
+                        event = await queue.get()
+                        if event is _SENTINEL:
+                            break
+                        yield event
+                    except asyncio.CancelledError:
+                        break
+            finally:
+                await self.detach_subscriber(run_key, queue)
+            return
+
+        missing = object()
+        pending_durable: Any = missing
+        durable_task: asyncio.Task | None = None
+        preview_task: asyncio.Task | None = None
         try:
             while True:
-                try:
-                    event = await queue.get()
-                    if event is _SENTINEL:
-                        break
-                    yield event
-                except asyncio.CancelledError:
+                if pending_durable is not missing:
+                    if preview_queue.empty():
+                        event = pending_durable
+                        pending_durable = missing
+                        if event is _SENTINEL:
+                            break
+                        yield event
+                        continue
+                    yield preview_queue.get_nowait()
+                    continue
+
+                if preview_queue.qsize() > 0:
+                    yield preview_queue.get_nowait()
+                    continue
+
+                durable_task = asyncio.ensure_future(queue.get())
+                preview_task = asyncio.ensure_future(preview_queue.get())
+                done, _ = await asyncio.wait(
+                    {durable_task, preview_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if preview_task in done:
+                    preview_result = preview_task.result()
+                    if durable_task in done:
+                        pending_durable = durable_task.result()
+                    else:
+                        durable_task.cancel()
+                        await asyncio.gather(
+                            durable_task,
+                            return_exceptions=True,
+                        )
+                    preview_task = None
+                    yield preview_result
+                    continue
+
+                event = durable_task.result()
+                # Cancel prefetch before yielding queued previews: otherwise
+                # it can take a clear while this generator is suspended.
+                async for item in drain_preview_events(
+                    preview_queue, preview_task
+                ):
+                    yield item
+                preview_task = None
+                if event is _SENTINEL:
                     break
+                durable_task = None
+                yield event
         finally:
+            for task in (durable_task, preview_task):
+                if task is not None and not task.done():
+                    task.cancel()
+            await asyncio.gather(
+                *(
+                    task
+                    for task in (durable_task, preview_task)
+                    if task is not None
+                ),
+                return_exceptions=True,
+            )
             await self.detach_subscriber(run_key, queue)

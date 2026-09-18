@@ -48,6 +48,7 @@ from .utils.message_request_normalizer import (
 from ..exceptions import ProviderError, ModelFormatterError
 from ..providers import ProviderManager
 from ..providers.capping_formatter import MAX_INLINE_MEDIA_BYTES
+from ..providers.tl_utils import is_tl_formatter, is_tl_model
 from ..utils.tool_call_extra import tool_call_extras_for_provider
 from ..providers.retry_chat_model import (
     RetryChatModel,
@@ -2173,8 +2174,8 @@ def _apply_model_fallbacks(
         fallback_models.append(
             RetryChatModel(
                 recorded_model,
-                retry_config=retry_config,
                 rate_limit_config=rate_limit_config,
+                **_provider_retry_options(fallback_model, retry_config),
             ),
         )
         seen_slots.add(fallback_key)
@@ -2295,8 +2296,8 @@ def create_model_and_formatter(
     )
     wrapped_model = RetryChatModel(
         wrapped_model,
-        retry_config=settings.retry_config,
         rate_limit_config=settings.rate_limit_config,
+        **_provider_retry_options(model, settings.retry_config),
     )
 
     wrapped_model = _apply_model_fallbacks(
@@ -2329,6 +2330,20 @@ async def create_model_and_formatter_async(
     )
 
 
+def _provider_retry_options(
+    model: ChatModelBase,
+    retry_config: RetryConfig | None,
+) -> dict[str, Any]:
+    """Keep TL's attempt budget authoritative while retaining rate limits."""
+    if is_tl_model(model):
+        return dict(
+            retry_config=RetryConfig(enabled=False),
+            stream_first_content_timeout=0,
+            stream_idle_timeout=0,
+        )
+    return dict(retry_config=retry_config)
+
+
 def _create_formatter_instance(
     model: ChatModelBase,
     provider_id: str | None = None,
@@ -2349,6 +2364,8 @@ def _create_formatter_instance(
         promotion and file blocks).
     """
     base_formatter = getattr(model, "formatter", None)
+    if is_tl_formatter(base_formatter):
+        return base_formatter
     if not isinstance(base_formatter, FormatterBase):
         # All agentscope 2.0 ChatModelBase subclasses default to a real
         # ``FormatterBase`` instance in ``__init__``; arriving here means a

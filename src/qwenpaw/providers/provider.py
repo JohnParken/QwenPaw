@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from qwenpaw.exceptions import ProviderError
 
 from .context_windows import DEFAULT_CONTEXT_WINDOW, resolve_context_window
+from .tl_config import TLConfig
 
 if TYPE_CHECKING:
     from .multimodal_prober import ProbeResult
@@ -325,6 +326,7 @@ class ProviderInfo(BaseModel):
     )
 
     id: str = Field(..., description="Provider identifier")
+    tl_config: TLConfig | None = Field(default=None)
     name: str = Field(..., description="Human-readable provider name")
     base_url: str = Field(default="", description="API base URL")
     api_key: str = Field(default="", description="API key for authentication")
@@ -639,7 +641,18 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
         )
 
     def update_config(self, config: Dict) -> None:
-        """Update provider configuration with the given dictionary."""
+        """Update configuration, raising ValueError for invalid settings.
+
+        Keep configuration errors compatible with Pydantic validation;
+        the settings router translates them into an HTTP 400 response.
+        """
+        requested_protocol = config.get("chat_model")
+        if (
+            requested_protocol is not None
+            and requested_protocol != self.chat_model
+            and "TLChatModel" in (self.chat_model, requested_protocol)
+        ):
+            raise ValueError("Create a new provider to switch to or from TL.")
         if "name" in config and config["name"] is not None:
             self.name = str(config["name"]).strip()
         if (
@@ -1215,6 +1228,7 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
             base_url=self.base_url,
             api_key=api_key,
             chat_model=self.chat_model,
+            tl_config=self.tl_config,
             # Discovery is a separate catalog used by the add-model form.
             # Do not expose it as configured models to selectors or lists.
             models=[
@@ -1248,7 +1262,7 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
             support_model_discovery=self.support_model_discovery,
             merge_with_catalog=self.merge_with_catalog,
             support_connection_check=self.support_connection_check
-            and not self.is_custom,
+            and (not self.is_custom or self.chat_model == "TLChatModel"),
             freeze_url=self.freeze_url,
             require_api_key=self.require_api_key,
             generate_kwargs=self.generate_kwargs,

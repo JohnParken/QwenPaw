@@ -42,6 +42,7 @@ from ...providers.provider_manager import ProviderManager
 from ...utils.io_utils import run_sync_io
 from ...utils.logging import sanitize_log_value
 from ...providers.openrouter_provider import OpenRouterProvider
+from ...providers.tl_config import TLConfig
 from ...config.config import ModelSlotConfig
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/models", tags=["models"])
 
 ChatModelName = Literal[
+    "TLChatModel",
     "OpenAIChatModel",
     "OpenAIResponseModel",
     "AnthropicChatModel",
@@ -100,6 +102,7 @@ def _active_models_info(
 
 
 class ProviderConfigRequest(BaseModel):
+    tl_config: Optional[TLConfig] = None
     api_key: Optional[str] = Field(default=None)
     base_url: Optional[str] = Field(default=None)
     name: Optional[str] = Field(
@@ -163,6 +166,7 @@ class ModelSlotRequest(BaseModel):
 
 
 class CreateCustomProviderRequest(BaseModel):
+    tl_config: Optional[TLConfig] = None
     id: str = Field(...)
     name: str = Field(...)
     default_base_url: str = Field(default="")
@@ -343,12 +347,17 @@ async def configure_provider(
         "custom_headers": body.custom_headers,
         "auth_mode": body.auth_mode,
     }
+    if body.tl_config is not None:
+        config["tl_config"] = body.tl_config.model_dump(exclude_unset=True)
     # Renaming is restricted to custom providers so built-in
     # provider names stay immutable.
     name = body.name.strip() if body.name else None
     if name and provider is not None and provider.is_custom:
         config["name"] = name
-    ok = await manager.update_provider_async(provider_id, config)
+    try:
+        ok = await manager.update_provider_async(provider_id, config)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not ok:
         raise HTTPException(
             status_code=404,
@@ -394,6 +403,7 @@ async def create_custom_provider_endpoint(
                 base_url=body.default_base_url,
                 api_key_prefix=body.api_key_prefix,
                 chat_model=body.chat_model,
+                tl_config=body.tl_config,
                 extra_models=body.models,
             ),
         )
@@ -419,6 +429,7 @@ class TestConnectionResponse(BaseModel):
 
 
 class TestProviderRequest(BaseModel):
+    tl_config: Optional[TLConfig] = None
     api_key: Optional[str] = Field(
         default=None,
         description="Optional API key to test",
@@ -513,13 +524,41 @@ async def test_provider(
             overrides["custom_headers"] = body.custom_headers
         if body and body.auth_mode in ("api_key", "auth_token"):
             overrides["auth_mode"] = body.auth_mode
-        tmp_provider = provider.model_copy(update=overrides)
+        if body and body.tl_config is not None:
+            overrides["tl_config"] = body.tl_config.model_dump(
+                exclude_unset=True
+            )
+        is_tl = provider.chat_model == "TLChatModel"
+        if overrides.get(
+            "chat_model", provider.chat_model
+        ) != provider.chat_model and (
+            is_tl or overrides.get("chat_model") == "TLChatModel"
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Create a new provider to switch to or from TL.",
+            )
+        if is_tl:
+            tmp_provider = provider.model_copy(deep=True)
+            try:
+                tmp_provider.update_config(overrides)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+        else:
+            tmp_provider = provider.model_copy(update=overrides)
         ok, msg = await tmp_provider.check_connection()
         return TestConnectionResponse(
             success=ok,
             message=(
-                "Connection successful" if ok else f"Connection failed: {msg}"
+                msg
+                if is_tl
+                else (
+                    "Connection successful"
+                    if ok
+                    else f"Connection failed: {msg}"
+                )
             ),
+            verification="provider_only" if is_tl and ok else None,
         )
     except (ValueError, AppBaseException) as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

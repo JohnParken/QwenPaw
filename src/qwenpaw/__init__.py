@@ -1,7 +1,13 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
+import sys
 import time
+
+# Service processes must never inherit credentials from a personal workspace.
+# This executes before logging/constant imports bootstrap local configuration.
+if len(sys.argv) > 1 and sys.argv[1] == "serve":
+    os.environ.setdefault("QWENPAW_SERVER_MODE", "1")
 from . import _compat as _compat_bootstrap
 from .utils.logging import setup_logger
 
@@ -14,7 +20,8 @@ try:
     # constants at import time (e.g., WORKING_DIR).
     from .envs import load_envs_into_environ
 
-    load_envs_into_environ()
+    if os.environ.get("QWENPAW_SERVER_MODE") != "1":
+        load_envs_into_environ()
 except Exception as exc:
     # Best effort: package import should not fail if env bootstrap fails.
     _bootstrap_err = exc

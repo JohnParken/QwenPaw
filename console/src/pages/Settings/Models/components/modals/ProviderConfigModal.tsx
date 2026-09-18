@@ -15,13 +15,16 @@ import {
   DownOutlined,
   RightOutlined,
 } from "@ant-design/icons";
+import { DEFAULT_TL_CONFIG } from "../../../../../api/types";
 import type {
   BaseUrlOption,
   ProviderConfigRequest,
+  TLConfig,
 } from "../../../../../api/types";
 import api from "../../../../../api";
 import { useTranslation } from "react-i18next";
 import { getLocalizedTestConnectionMessage } from "./testConnectionMessage";
+import { TLConfigFields } from "./TLConfigFields";
 import { getValidApiKeyPrefixes, validateApiKey } from "../../apiKeyValidation";
 import styles from "../../index.module.less";
 
@@ -31,6 +34,7 @@ interface ProviderConfigFormValues
     "generate_kwargs" | "custom_headers" | "auth_mode"
   > {
   generate_kwargs_text?: string;
+  tl_config?: TLConfig;
 }
 
 interface HeaderEntry {
@@ -276,6 +280,7 @@ interface ProviderConfigModalProps {
     custom_headers?: Record<string, string>;
     auth_mode?: "api_key" | "auth_token";
     meta?: Record<string, unknown>;
+    tl_config?: TLConfig;
   };
   activeModels: any;
   open: boolean;
@@ -361,6 +366,8 @@ export function ProviderConfigModal({
       effectiveChatModel === "AnthropicChatModel",
     [provider.id, provider.chat_model, effectiveChatModel],
   );
+  const isTLProvider = effectiveChatModel === "TLChatModel";
+  const tlConfig = provider.tl_config ?? DEFAULT_TL_CONFIG;
 
   const validApiKeyPrefixes = useMemo(
     () => getValidApiKeyPrefixes(provider),
@@ -465,6 +472,7 @@ export function ProviderConfigModal({
           Object.keys(provider.generate_kwargs).length > 0
             ? JSON.stringify(provider.generate_kwargs, null, 2)
             : undefined,
+        tl_config: isTLProvider ? { ...tlConfig } : undefined,
       });
       setAdvancedOpen(false);
       setFormDirty(false);
@@ -476,7 +484,7 @@ export function ProviderConfigModal({
         })),
       );
     }
-  }, [provider, form, open]);
+  }, [provider, form, open, isTLProvider, tlConfig]);
 
   const handleSubmit = async () => {
     try {
@@ -502,6 +510,7 @@ export function ProviderConfigModal({
           chat_model: values.chat_model,
           custom_headers: testHeaders,
           auth_mode: isAnthropicProvider ? authMode : undefined,
+          tl_config: isTLProvider ? values.tl_config : undefined,
         });
 
         if (!result.success) {
@@ -526,6 +535,7 @@ export function ProviderConfigModal({
         generate_kwargs: hasGenerateConfigInput ? generateConfig : {},
         custom_headers: headersObj,
         auth_mode: isAnthropicProvider ? authMode : undefined,
+        tl_config: isTLProvider ? form.getFieldValue("tl_config") : undefined,
       });
 
       await onSaved();
@@ -553,7 +563,8 @@ export function ProviderConfigModal({
         "api_key",
         "base_url",
         "chat_model",
-      ]);
+        ...(isTLProvider ? ["tl_config"] : []),
+      ], { recursive: true });
       const testHeaders = customHeaders
         .filter((h) => h.key.trim())
         .reduce<Record<string, string>>((acc, h) => {
@@ -566,6 +577,7 @@ export function ProviderConfigModal({
         chat_model: values.chat_model,
         custom_headers: testHeaders,
         auth_mode: isAnthropicProvider ? authMode : undefined,
+        tl_config: isTLProvider ? form.getFieldValue("tl_config") : undefined,
       });
       if (result.success) {
         message.success(getLocalizedTestConnectionMessage(result, t));
@@ -720,10 +732,15 @@ export function ProviderConfigModal({
                   value: "AnthropicChatModel",
                   label: t("models.protocolAnthropic"),
                 },
+                ...(provider.chat_model === "TLChatModel"
+                  ? [{ value: "TLChatModel", label: t("models.protocolTL") }]
+                  : []),
               ]}
             />
           </Form.Item>
         )}
+
+        {isTLProvider && <TLConfigFields defaults={tlConfig} />}
 
         {/* Base URL */}
         <Form.Item
@@ -900,33 +917,35 @@ export function ProviderConfigModal({
             </Form.Item>
           )}
 
-          <Form.Item
-            hidden={!advancedOpen}
-            name="generate_kwargs_text"
-            label={t("models.generateConfig")}
-            extra={t("models.generateConfigHint")}
-            rules={[
-              {
-                validator: (_: unknown, value?: string) => {
-                  try {
-                    parseGenerateConfig(value);
-                    return Promise.resolve();
-                  } catch (error) {
-                    return Promise.reject(
-                      error instanceof Error
-                        ? error
-                        : new Error(t("models.generateConfigInvalidJson")),
-                    );
-                  }
+          {!isTLProvider && (
+            <Form.Item
+              hidden={!advancedOpen}
+              name="generate_kwargs_text"
+              label={t("models.generateConfig")}
+              extra={t("models.generateConfigHint")}
+              rules={[
+                {
+                  validator: (_: unknown, value?: string) => {
+                    try {
+                      parseGenerateConfig(value);
+                      return Promise.resolve();
+                    } catch (error) {
+                      return Promise.reject(
+                        error instanceof Error
+                          ? error
+                          : new Error(t("models.generateConfigInvalidJson")),
+                      );
+                    }
+                  },
                 },
-              },
-            ]}
-          >
-            <JsonCodeEditor
-              rows={8}
-              placeholder={`Example:\n{\n  "extra_body": {\n    "enable_thinking": false\n  },\n  "max_tokens": 2048\n}`}
-            />
-          </Form.Item>
+              ]}
+            >
+              <JsonCodeEditor
+                rows={8}
+                placeholder={`Example:\n{\n  "extra_body": {\n    "enable_thinking": false\n  },\n  "max_tokens": 2048\n}`}
+              />
+            </Form.Item>
+          )}
         </div>
       </Form>
     </Modal>

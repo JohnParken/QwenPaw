@@ -18,6 +18,7 @@ DiscoveryStrategy = Literal[
 ]
 ModelSyncMode = Literal["startup", "manual", "disabled"]
 CustomChatModelName = Literal[
+    "TLChatModel",
     "OpenAIChatModel",
     "OpenAIResponseModel",
     "AnthropicChatModel",
@@ -112,6 +113,12 @@ BUILTIN_DISCOVERY_POLICIES: dict[str, ProviderDiscoveryPolicy] = {
 }
 
 CUSTOM_DISCOVERY_POLICIES: dict[str, ProviderDiscoveryPolicy] = {
+    "TLChatModel": ProviderDiscoveryPolicy(
+        "unsupported",
+        sync_mode="disabled",
+        requires_auth=False,
+        reason="TL binds one server route and has no model discovery API.",
+    ),
     "OpenAIChatModel": ProviderDiscoveryPolicy("openai_models"),
     "OpenAIResponseModel": ProviderDiscoveryPolicy("openai_models"),
     "AnthropicChatModel": ProviderDiscoveryPolicy("anthropic_models"),

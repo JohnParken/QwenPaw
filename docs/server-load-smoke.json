@@ -1,0 +1,32 @@
+{
+  "test_id": "5b9303a21227471893a881efece88af5",
+  "configured_duration_seconds": 60.0,
+  "ramp_seconds": 5,
+  "actual_duration_seconds": 67.82896508299746,
+  "task_slots": 100,
+  "sse_slots": 500,
+  "runs_submitted": 1932,
+  "runs_completed": 1932,
+  "terminal_statuses": {
+    "completed": 1932
+  },
+  "errors": {},
+  "submit_latency_seconds": {
+    "count": 1932,
+    "p50": 0.04293562498060055,
+    "p95": 0.09353162499610335,
+    "p99": 0.14633308298652992
+  },
+  "first_event_observed_seconds": {
+    "count": 9660,
+    "p50": 2.0996349999913946,
+    "p95": 2.4759625410079025,
+    "p99": 2.573332083004061
+  },
+  "event_persisted_at_lag_seconds": {
+    "count": 260820,
+    "p50": 0.09277701377868652,
+    "p95": 0.1998729705810547,
+    "p99": 0.24226999282836914
+  }
+}

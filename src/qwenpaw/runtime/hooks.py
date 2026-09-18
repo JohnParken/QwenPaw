@@ -95,6 +95,8 @@ class HookContext:
     # ── Containers (read by hooks; never mutated) ──
     workspace: (Any)  # forward ref: app/workspace/workspace.py:Workspace
     app_services: Any  # forward ref: AppServiceManager
+    user_id: str = ""
+    run_id: str = ""
 
     # ── Per-request mutable state, filled in across phases ──
     input_msgs: list = field(default_factory=list)

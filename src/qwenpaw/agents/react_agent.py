@@ -44,6 +44,7 @@ from ..constant import (
 from ..loop.gates import StopAction, StopHandlerResult
 from ..providers.error_utils import extract_status_code
 from ..providers.fallback_chat_model import install_fallback_notice_sink
+from ..providers.tl_utils import is_tl_formatter
 from ..providers.model_capability_cache import get_capability_cache
 from ..utils.tool_call_extra import (
     collect_transient_tool_call_extras,
@@ -643,6 +644,12 @@ class QwenPawAgent(CodingModeMixin, Agent):
         with the rendered exception as a compatibility fallback for gateways
         that wrap the original response.
         """
+        from ..providers.tl_errors import TLError
+
+        if isinstance(exc, TLError):
+            return (
+                exc.stage == "prompt_encode" and exc.kind == "context_overflow"
+            )
         status = extract_status_code(exc)
         error_str = str(exc).lower()
         if status != 400 and "error code: 400" not in error_str:
@@ -873,6 +880,12 @@ class QwenPawAgent(CodingModeMixin, Agent):
                 ],
             )
             return
+
+        formatter = self._get_active_formatter()
+        if is_tl_formatter(formatter):
+            from ..providers.tl_formatter import TLChatFormatter
+
+            TLChatFormatter.validate_text_input(self.state.context)
 
         # ── Proactive media stripping ──
         from .model_factory import _supports_multimodal_for_current_model

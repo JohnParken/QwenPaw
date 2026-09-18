@@ -37,6 +37,7 @@ CONNECTION_CONFIG_FIELDS = frozenset(
         "auth_mode",
         "custom_headers",
         "chat_model",
+        "tl_config",
         "api_key_prefix",
         "api_key_prefixes",
     },

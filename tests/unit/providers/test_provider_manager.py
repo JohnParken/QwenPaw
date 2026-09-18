@@ -380,13 +380,14 @@ async def test_add_custom_provider_rejects_unsafe_id(
     provider_id: str,
 ) -> None:
     manager = ProviderManager()
+    existing = dict(manager.custom_providers)
 
     with pytest.raises(ProviderError, match="Provider ID"):
         await manager.add_custom_provider(
             ProviderInfo(id=provider_id, name="Unsafe"),
         )
 
-    assert not manager.custom_providers
+    assert manager.custom_providers == existing
 
 
 async def test_add_custom_provider_publishes_after_persistence(

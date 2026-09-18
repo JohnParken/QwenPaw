@@ -12,6 +12,7 @@ from agentscope.model._model_response import ChatResponse
 
 from .model_error_policy import classify_model_error, is_fallback_eligible
 from .stream_progress import has_meaningful_stream_content
+from .tl_utils import is_tl_model
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,12 @@ class FallbackChatModel(ChatModelBase):
     @context_size.setter
     def context_size(self, value: int) -> None:
         self._default_context_size = value
+
+    async def count_tokens(self, messages, tools=None):
+        """Count the compiled TL prompt through transparent wrappers."""
+        if is_tl_model(self._active_model):
+            return await self._active_model.count_tokens(messages, tools)
+        return await super().count_tokens(messages, tools)
 
     def _activate_model(self, model: ChatModelBase) -> None:
         """Expose routing metadata from the model handling the request."""
@@ -330,6 +337,10 @@ class FallbackChatModel(ChatModelBase):
         raise last_error
 
     def _can_try_next(self, index: int, exc: Exception) -> bool:
+        from .tl_errors import TLError
+
+        if isinstance(exc, TLError):
+            return False
         if index + 1 >= len(self._models):
             return False
         # Only the primary model's error class decides whether fallback
@@ -406,9 +417,9 @@ class FallbackChatModel(ChatModelBase):
         if events:
             metadata["qwenpaw_model_fallbacks"] = list(events)
         if active_model is not None:
-            metadata[
-                "qwenpaw_actual_model"
-            ] = FallbackChatModel._actual_model_dict(active_model)
+            metadata["qwenpaw_actual_model"] = (
+                FallbackChatModel._actual_model_dict(active_model)
+            )
         response.metadata = metadata
         return response
 

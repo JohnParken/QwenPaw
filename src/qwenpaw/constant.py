@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 # Load .env file from project root before reading any env vars
 _env_path = Path(__file__).resolve().parent.parent.parent / ".env"
-if _env_path.exists():
+if os.environ.get("QWENPAW_SERVER_MODE") != "1" and _env_path.exists():
     load_dotenv(_env_path)
 
 
@@ -97,7 +97,7 @@ else:
 # over the user-level file because load_dotenv(..., override=False) keeps
 # existing values.
 _user_env_path = WORKING_DIR / ".env"
-if _user_env_path.exists():
+if os.environ.get("QWENPAW_SERVER_MODE") != "1" and _user_env_path.exists():
     load_dotenv(_user_env_path)
 
 SECRET_DIR = (

@@ -117,7 +117,21 @@ def classify_model_check(
         "\u4e0d\u652f\u6301chat",
     )
 
-    if error_kind in {
+    if error_kind == "tl_error":
+        # TL's 404 describes the fixed gateway/session path, not a model ID.
+        status = (
+            "permission_denied"
+            if http_status in (401, 403)
+            else (
+                "incompatible_api"
+                if http_status == 404
+                else (
+                    "rate_limited" if http_status == 429 else "transient_error"
+                )
+            )
+        )
+        retryable = False
+    elif error_kind in {
         "permission_denied",
         "model_not_found",
         "incompatible_api",
