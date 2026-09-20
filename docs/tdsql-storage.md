@@ -1,7 +1,7 @@
 # P0: TDSQL storage
 
-This document supersedes PostgreSQL deployment/storage instructions in
-`multi-user-server.md`. The BFF API and sandbox boundaries remain unchanged.
+This document describes storage for the current [Server v1 baseline](multi-user-server.md).
+TDSQL replaces the historical PostgreSQL prototype. The BFF API and sandbox boundaries remain unchanged.
 
 ## Configuration
 

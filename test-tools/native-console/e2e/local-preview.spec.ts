@@ -50,6 +50,7 @@ test("本地 TL 在响应结束前显示预览，确认后替换为正式正文"
     };
   });
   await page.goto("/");
+  await page.locator("#chat-mode").selectOption("local");
   await page.locator("#connect-form button").first().click();
   await expect(page.locator("#connection-status")).toContainText("已连接");
   await page.locator("#prompt").fill("请给我一个详细答案");

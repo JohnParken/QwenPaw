@@ -3,6 +3,7 @@ import { test, type MockState } from "./fixtures";
 
 async function connect(page: import("@playwright/test").Page): Promise<void> {
   await page.goto("/");
+  await page.locator("#chat-mode").selectOption("local");
   await page.locator("#connect-form button").first().click();
   await expect(page.locator("#connection-status")).toContainText("已连接");
 }

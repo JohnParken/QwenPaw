@@ -2194,6 +2194,8 @@
     "tlSystemPromptVariable": "系统提示词变量名",
     "tlToolCallingMode": "工具调用模式",
     "tlJsonCorrectionAttempts": "JSON 修正次数（0 或 1）",
+    "tlTrustEnv": "使用环境代理",
+    "tlTrustEnvHint": "关闭（默认）时使用直连套接字访问网关，忽略 HTTP_PROXY、HTTPS_PROXY 及系统代理设置。仅当网关本身必须经正向代理访问时才开启。",
     "tlTimeoutSeconds": "请求超时（秒）",
     "tlStreamIdleTimeoutSeconds": "流空闲超时（秒）",
     "tlMaxRequestBytes": "请求最大字节数",

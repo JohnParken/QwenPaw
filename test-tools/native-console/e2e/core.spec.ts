@@ -22,6 +22,7 @@ test("连接、Agent、模型、渠道和 Cron 使用真实方法与请求字段
   mock,
 }) => {
   await page.goto("/");
+  await page.locator("#chat-mode").selectOption("local");
   await page.getByText("使用账号密码登录", { exact: true }).click();
   await page.locator("#username").fill("tester");
   await page.locator("#password").fill("login-password");
@@ -80,6 +81,7 @@ test("文件浏览、ETag 冲突和 multipart 上传保持编辑内容", async (
   mock,
 }) => {
   await page.goto("/");
+  await page.locator("#chat-mode").selectOption("local");
   await connect(page);
   await page.locator('button[data-tab="files"]').click();
   await page.locator("#browse-form button").first().click();
@@ -128,6 +130,7 @@ test("会话创建、SSE delta/snapshot 去重、未知工具事件日志和停�
   mock,
 }) => {
   await page.goto("/");
+  await page.locator("#chat-mode").selectOption("local");
   await connect(page);
   await page.locator("#new-chat").click();
   await expect(page.locator("#chat-identity")).toContainText("session");
@@ -175,6 +178,7 @@ test("401 可见、日志结构完整、敏感字段脱敏且响应文本不执�
   mock.authEnabled = true;
   mock.force401 = true;
   await page.goto("/");
+  await page.locator("#chat-mode").selectOption("local");
   await page.locator("#token").fill("token-secret");
   await page.locator("#connect-form button").first().click();
   await expect(page.locator("#notice")).toContainText("401");
@@ -224,6 +228,7 @@ test("Agent 核心能力验证：收件箱、技能管理、工作区检查点�
   mock,
 }) => {
   await page.goto("/");
+  await page.locator("#chat-mode").selectOption("local");
   await connect(page);
 
   // 1. 收件箱与审批

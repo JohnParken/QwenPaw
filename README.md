@@ -29,6 +29,8 @@
 
 </div>
 
+Multi-user Web service: use `/v1` as the product entry point. See the [deployment guide](docs/multi-user-server.md), [API contract](docs/v1-api.md), and [local TL quick start](docs/multi-user-tl.md). Personal mode remains supported.
+
 Your personal AI assistant — deploy locally or in the cloud, extend with Skills & Plugins, connect across every channel.
 
 | | |

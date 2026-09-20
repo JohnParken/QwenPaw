@@ -1,0 +1,195 @@
+/* Design tokens, element reset, and generic utilities. */
+/**
+ * QwenPaw Native Console Design System
+ * Matches the original QwenPaw Console design tokens and App Shell layout.
+ * Zero browser runtime dependencies.
+ */
+
+:root {
+  /* Surfaces */
+  --app-bg: #f9f8f4;
+  --app-surface: #ffffff;
+  --app-surface-subtle: #faf9f7;
+  --app-surface-raised: #ffffff;
+  --app-surface-sunken: #f4f3ef;
+  --app-shell-bg: #f9f8f4;
+
+  /* Brand Accent (QwenPaw signature warm orange) */
+  --app-accent: #ff7f16;
+  --app-accent-hover: #ff9d4d;
+  --app-accent-active: #d96806;
+  --app-accent-text: #bd5100;
+  --app-accent-soft: rgba(255, 127, 22, 0.1);
+  --app-accent-soft-hover: rgba(255, 127, 22, 0.16);
+  --app-accent-border: rgba(255, 127, 22, 0.42);
+  --app-accent-ring: rgba(255, 127, 22, 0.2);
+
+  /* Fills */
+  --app-fill-strong: rgba(0, 0, 0, 0.09);
+  --app-fill: rgba(0, 0, 0, 0.06);
+  --app-fill-subtle: rgba(0, 0, 0, 0.04);
+  --app-fill-faint: rgba(0, 0, 0, 0.02);
+
+  /* Borders */
+  --app-border: #eae8e7;
+  --app-border-strong: #d8d4cf;
+  --app-border-hover: #d8d4cf;
+  --app-border-subtle: #f0eeeb;
+
+  /* Text */
+  --app-text: rgba(20, 20, 19, 0.88);
+  --app-text-secondary: rgba(20, 20, 19, 0.62);
+  --app-text-tertiary: rgba(20, 20, 19, 0.45);
+  --app-text-quaternary: rgba(20, 20, 19, 0.25);
+  --app-text-inverse: #ffffff;
+
+  /* Navigation & Selection */
+  --app-nav-selected-bg: rgba(43, 18, 0, 0.08);
+  --app-nav-selected-text: var(--app-text);
+  --app-selected-bg: #e6f4ff;
+  --app-selected-border: #1677ff;
+
+  /* Semantic status */
+  --app-success: #52c41a;
+  --app-success-bg: #f6ffed;
+  --app-success-border: #b7eb8f;
+  --app-warning: #faad14;
+  --app-warning-bg: #fffbe6;
+  --app-warning-border: #ffe58f;
+  --app-error: #ff4d4f;
+  --app-error-bg: #fff2f0;
+  --app-error-border: #ffccc7;
+  --app-info: #1677ff;
+  --app-info-bg: #e6f4ff;
+  --app-info-border: #91caff;
+
+  /* Radii & Shadows */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+  --app-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --app-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  --app-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.09);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--app-text);
+  background: var(--app-bg);
+  height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* General button styling */
+button {
+  cursor: pointer;
+  border: 1px solid var(--app-border);
+  background: var(--app-surface-subtle);
+  color: var(--app-text);
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+button:hover {
+  background: var(--app-fill);
+  border-color: var(--app-border-strong);
+}
+
+button.primary {
+  background: var(--app-accent);
+  color: #fff;
+  border-color: var(--app-accent);
+}
+
+button.primary:hover {
+  background: var(--app-accent-hover);
+}
+
+button.danger {
+  background: var(--app-error);
+  color: #fff;
+  border-color: var(--app-error);
+}
+
+button.secondary {
+  background: transparent;
+}
+
+/* Hidden utility */
+[hidden] {
+  display: none !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  font-weight: 600;
+}
+
+@media (max-width: 1000px) {
+  main {
+    grid-template-columns: 1fr;
+  }
+  .forms-grid {
+    grid-template-columns: 1fr;
+  }
+  .section-title,
+  .stream-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 640px) {
+  label {
+    flex-basis: auto;
+    min-width: 0;
+  }
+  #app {
+    padding: 12px;
+  }
+  header {
+    padding: 12px;
+  }
+  .badge {
+    width: 100%;
+    text-align: center;
+  }
+  .row,
+  .subcard,
+  .forms-grid,
+  fieldset form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

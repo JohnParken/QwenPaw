@@ -103,6 +103,7 @@ test("本地模型诊断独立于聊天正文、去重并支持筛选清空导�
   );
 
   await page.goto("/");
+  await page.locator("#chat-mode").selectOption("local");
   await connect(page);
   await page.locator("#new-chat").click();
   await expect(page.locator("#debug-toggle")).not.toBeChecked();

@@ -53,6 +53,56 @@ API key 推荐使用 `api_key_env` 引用环境变量，避免把凭证放入模
 `generate_kwargs` 必须符合所选后端支持的参数。TL 不支持此类生成参数覆盖：
 上游模型路由、采样、思考设置仍在代理的 `.env` 中配置。
 
+### 直连真实网关（不使用本地 proxy）
+
+把 `base_url` 指向真实网关即可，无需改动协议代码；本地 proxy 只是同一协议的可选对端。
+最小直连文件（内网 http、免鉴权）：
+
+```json
+{
+  "version": 1,
+  "enabled": true,
+  "providers": [{
+    "id": "tl-gateway",
+    "name": "TL Gateway",
+    "base_url": "http://10.1.2.3:8080",
+    "chat_model": "TLChatModel",
+    "is_custom": true,
+    "models": [{
+      "id": "internal-route",
+      "name": "internal-route",
+      "max_input_length": 32768,
+      "max_input_length_configured": true
+    }],
+    "tl_config": {
+      "app_id": "my-app",
+      "tr_code": "agent-chat",
+      "tr_version": "1.0",
+      "system_prompt_variable_name": "system_prompt",
+      "tool_calling_mode": "system_prompt",
+      "json_correction_max_attempts": 1,
+      "trust_env": false
+    }
+  }],
+  "active_model": {"provider_id": "tl-gateway", "model": "internal-route"}
+}
+```
+
+`base_url` 只用服务根地址（可带公司路径前缀），客户端追加
+`/chatbbc/init_session` 和 `/chatbbc/chat`，不追加 `/v1`。`models[].id` 是本地标签，
+不发给网关也不切换服务端模型；一个供应商只配一个标签。
+
+`tl_config.trust_env` 默认为 `false`：TL 的 httpx 客户端用直连套接字，不读取
+`HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` 和平台代理设置。内网明文 HTTP 网关若被
+正向代理接管，通常只会得到 407 或代理自身的错误页，因此默认不信任环境代理；确实需要
+经正向代理访问网关时才改成 `true`。该开关只影响 TL 请求，不影响其他供应商与渠道。
+
+鉴权沿用供应商的 `api_key`（`Authorization: Bearer`）或 `custom_headers`；免鉴权内网
+留空即可，`app_id` / `tr_code` / `tr_version` 是业务元数据而非身份凭证。
+
+Windows 源码运行、探测网关与排错步骤见
+[windows-direct-tl-gateway.md](windows-direct-tl-gateway.md)。
+
 在「设置 → 模型」新建自定义供应商，选择 **TL (system prompt)**。填写服务根地址，
 可保留公司路径前缀，例如 `https://gateway.example/company`。客户端追加
 `/chatbbc/init_session` 和 `/chatbbc/chat`，不追加 `/v1`。

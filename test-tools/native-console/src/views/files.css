@@ -1,0 +1,205 @@
+/* Files workspace tab and its checkpoints panel. */
+/* ─── Files Workspace Tab ──────────────────────────────────── */
+#files {
+  padding: 24px 32px;
+  overflow-y: auto;
+  gap: 20px;
+}
+
+.workspace-card {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--app-shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.workspace-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.file-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 8px;
+  background: var(--app-surface-sunken);
+  border: 1px solid var(--app-border-subtle);
+  border-radius: var(--radius);
+}
+
+.file-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--app-text);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-entry:hover {
+  border-color: var(--app-accent);
+  background: var(--app-accent-soft);
+  color: var(--app-accent-text);
+}
+
+.file-editor-area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.file-editor-area textarea {
+  width: 100%;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 12px 14px;
+  background: var(--app-surface-subtle);
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius);
+  outline: none;
+  resize: vertical;
+}
+
+.file-editor-area textarea:focus {
+  border-color: var(--app-accent);
+  box-shadow: 0 0 0 2px var(--app-accent-ring);
+  background: var(--app-surface);
+}
+
+/* Checkpoints Panel */
+.checkpoints-container {
+  margin-top: 16px;
+  padding: 14px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius);
+  box-shadow: var(--app-shadow-sm);
+}
+.checkpoints-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--app-border-subtle);
+  padding-bottom: 8px;
+}
+.checkpoints-header-row h4 {
+  margin: 0;
+  font-size: 14px;
+}
+.checkpoints-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.checkpoint-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--app-surface-subtle);
+  padding: 8px 12px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--app-border-subtle);
+  font-size: 12px;
+}
+.checkpoint-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.checkpoint-name {
+  font-weight: 600;
+  color: var(--app-text);
+}
+.checkpoint-commit code {
+  background: var(--app-fill);
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.checkpoint-time {
+  color: var(--app-text-tertiary);
+  font-size: 11px;
+}
+.btn-restore-cp {
+  padding: 3px 10px;
+  font-size: 11px;
+}
+
+/* Extracted inline styles (Files workspace inline-style replacements.) */
+.field-label-strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.select-root {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--app-border);
+}
+
+.row-margin-0 {
+  margin: 0;
+}
+
+.field-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.input-dir {
+  padding: 4px 8px;
+  width: 200px;
+}
+
+.field-label-grow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  flex: 1;
+}
+
+.input-grow {
+  padding: 4px 8px;
+  width: 100%;
+}
+
+.field-label-text {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+.section-title {
+  margin: 0;
+  font-size: 14px;
+}
+
+.align-start {
+  align-self: flex-start;
+}

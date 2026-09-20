@@ -2336,6 +2336,8 @@
     "tlSystemPromptVariable": "System prompt variable name",
     "tlToolCallingMode": "Tool calling mode",
     "tlJsonCorrectionAttempts": "JSON correction attempts (0 or 1)",
+    "tlTrustEnv": "Use environment proxy",
+    "tlTrustEnvHint": "Off (default) connects to the gateway directly with a direct socket, ignoring HTTP_PROXY, HTTPS_PROXY and platform proxy settings. Turn it on only when the gateway itself must be reached through a forward proxy.",
     "tlTimeoutSeconds": "Request timeout (seconds)",
     "tlStreamIdleTimeoutSeconds": "Stream idle timeout (seconds)",
     "tlMaxRequestBytes": "Maximum request bytes",

@@ -51,7 +51,7 @@ export default defineConfig(({ mode }) => {
     define: {
       __QWENPAW_SERVICE_USER__: JSON.stringify(serviceUser),
       __QWENPAW_CHAT_MODE__: JSON.stringify(
-        env.QWENPAW_CHAT_MODE === "service" ? "service" : "local",
+        env.QWENPAW_CHAT_MODE === "local" ? "local" : "service",
       ),
       __QWENPAW_MODEL_DEBUG_DEFAULT__: JSON.stringify(modelDebugDefault),
     },

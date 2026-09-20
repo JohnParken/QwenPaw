@@ -122,6 +122,7 @@ export interface TLConfig {
   system_prompt_variable_name: string;
   tool_calling_mode: "system_prompt";
   json_correction_max_attempts: 0 | 1;
+  trust_env: boolean;
   timeout_seconds: number;
   stream_idle_timeout_seconds: number;
   max_request_bytes: number;
@@ -137,6 +138,7 @@ export const DEFAULT_TL_CONFIG: TLConfig = {
   system_prompt_variable_name: "system_prompt",
   tool_calling_mode: "system_prompt",
   json_correction_max_attempts: 1,
+  trust_env: false,
   timeout_seconds: 150,
   stream_idle_timeout_seconds: 0,
   max_request_bytes: 1048576,

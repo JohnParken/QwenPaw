@@ -1,4 +1,4 @@
-import { Form, Input, InputNumber } from "@agentscope-ai/design";
+import { Form, Input, InputNumber, Switch } from "@agentscope-ai/design";
 import { useTranslation } from "react-i18next";
 import type { TLConfig } from "../../../../../api/types";
 
@@ -48,6 +48,15 @@ export function TLConfigFields({ defaults }: { defaults: TLConfig }) {
         initialValue={defaults.tool_calling_mode}
       >
         <Input disabled />
+      </Form.Item>
+      <Form.Item
+        name={["tl_config", "trust_env"]}
+        label={t("models.tlTrustEnv")}
+        extra={t("models.tlTrustEnvHint")}
+        valuePropName="checked"
+        initialValue={defaults.trust_env}
+      >
+        <Switch />
       </Form.Item>
       {budgetFields.map(([name, label]) => (
         <Form.Item

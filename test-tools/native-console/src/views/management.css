@@ -1,0 +1,91 @@
+/* Manage and models tab. */
+/* ─── Manage & Models Tab ──────────────────────────────────── */
+#manage {
+  padding: 24px 32px;
+  overflow-y: auto;
+  gap: 20px;
+}
+
+.forms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.subcard {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--app-shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.subcard h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--app-text);
+  border-bottom: 1px solid var(--app-border-subtle);
+  padding-bottom: 8px;
+}
+
+.subcard label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-text-secondary);
+}
+
+.subcard input,
+.subcard select,
+.subcard textarea {
+  padding: 7px 10px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-sm);
+  background: var(--app-surface-subtle);
+  font-size: 13px;
+  outline: none;
+}
+
+.subcard input:focus,
+.subcard select:focus,
+.subcard textarea:focus {
+  border-color: var(--app-accent);
+  box-shadow: 0 0 0 2px var(--app-accent-ring);
+  background: var(--app-surface);
+}
+
+.result {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  font-family: monospace;
+  font-size: 12px;
+  overflow: auto;
+  max-height: 220px;
+  margin: 0;
+}
+
+/* Extracted inline styles (Manage tab inline-style replacements.) */
+.gap-10 {
+  gap: 10px;
+}
+
+.stack-gap-6 {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stack-gap-8-top-8 {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}

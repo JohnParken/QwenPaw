@@ -11,7 +11,13 @@
 在本目录执行 `npm run service:tl`，启动真实 TL 的多用户 `/v1` 服务和前端。
 配置方式、已有代理复用和生产部署见 [多用户 TL 接入](../../docs/multi-user-tl.md)。
 
-## 多用户服务流式聊天（本次新增）
+个人模式联调使用 `npm run live:start`（`live:services` 只启动底层服务、`live:console`
+只启动前端、`live:stop` 全部停止）。它现在会同时启动多用户 `/v1` 服务（8092）：
+前端默认选中「服务聊天 /v1」，缺少该服务时页面只会收到开发代理的 `HTTP 500: ""`。
+端口可用 `QWENPAW_TL_PROXY_PORT`、`QWENPAW_PERSONAL_PORT`、`QWENPAW_SERVICE_PORT`、
+`QWENPAW_CONSOLE_PORT` 覆盖；`/v1` 服务日志在 `logs/service-api.log`。
+
+## 多用户服务流式聊天（模拟验收）
 
 在**仓库根目录**开启终端一：
 
@@ -43,15 +49,108 @@ npm ci
 npm run dev
 ```
 
-打开 <http://127.0.0.1:5179>。默认 `/api` 代理到 `http://127.0.0.1:8088`，无需修改或启动现有 Console。连接其他本地测试后端时：
+打开 <http://127.0.0.1:5179>。默认选择多用户 `/v1`，开发代理目标为 `http://127.0.0.1:8092`；需要先启动服务并配置匹配的令牌，或使用 `npm run service:tl` 一键启动。
+
+个人模式保留兼容；连接个人后端时显式选择 `local`：
 
 ```sh
-QWENPAW_API_TARGET=http://127.0.0.1:8089 npm run dev
+QWENPAW_CHAT_MODE=local QWENPAW_API_TARGET=http://127.0.0.1:8088 npm run dev
 ```
 
 也可以将 `.env.example` 复制为 `.env.local` 后修改并重启。代理目标只在开发服务器使用，不会注入浏览器代码。页面访问令牌、账号密码与 Provider API Key 不写入本地存储；刷新页面后需要重新输入。登录后可以切换后端返回的 Agent。
 
 真实模式下，点击保存、上传、创建任务、发送消息会操作所连接后端。请选择测试 Agent 和测试工作区。默认新建定时任务为暂停，上传同名文件采取 `rename`。
+
+## 本地联调：一键启动与分步启动
+
+上面的 `npm run dev` 只启动前端。前端本身不需要后端也能打开，但**连接面板、聊天、管理页、文件页都需要后端**：`/api` 代理指向 8088（个人后端），`/api/service` 代理指向 8092（多用户 `/v1` 服务）。后端没起来时，连接会失败，收件箱/技能等标签会收到开发代理返回的 `HTTP 500: ""`——这看起来像前端崩溃，实际是代理目标无人监听。
+
+`scripts/manage-live.mjs` 提供了跨平台（macOS/Linux + Windows）的启动器，零外部依赖。
+
+### 一条命令启动全部
+
+```sh
+cd test-tools/native-console
+npm ci                 # 首次
+npm run live:start     # 依次启动 tl-proxy → QwenPaw 后端 → /v1 服务 → 前端
+```
+
+看到「全链路联调测试环境已全部就绪」后打开 <http://127.0.0.1:5179>。
+
+| 服务                | 地址                    | 用途                                 |
+| ------------------- | ----------------------- | ------------------------------------ |
+| Native Console 前端 | <http://127.0.0.1:5179> | 验证界面                             |
+| QwenPaw Python 后端 | <http://127.0.0.1:8088> | 本地模式：管理页、收件箱、技能、文件 |
+| 多用户 `/v1` 服务   | <http://127.0.0.1:8092> | 服务聊天模式                         |
+| TL 流量转发代理     | <http://127.0.0.1:8089> | TL Provider 上游                     |
+
+启动器会复用**已在监听**的端口，所以重复执行是安全的：已运行的服务不会被重启，只补齐缺失的部分。
+
+### 分步启动
+
+| 命令                    | 作用                                                                                                             |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `npm run live:services` | 只启动底层三项：tl-proxy + QwenPaw 后端 + `/v1` 服务                                                             |
+| `npm run live:console`  | 只启动前端测试台                                                                                                 |
+| `npm run live:start`    | 四阶段全量启动（上面两个的合集）                                                                                 |
+| `npm run live:stop`     | 优雅停止全部服务并释放端口                                                                                       |
+| `npm run service:tl`    | 前台运行「TL Proxy + 真实 TL 的多用户 `/v1` API/Worker + 前端」；`Ctrl+C` 只停止本次启动的子进程，不影响其他实例 |
+
+典型用法是先 `npm run live:services` 起后端，再用 `npm run dev` 起前端，这样前端日志直接打在终端里。
+
+### 端口与日志
+
+端口可用环境变量覆盖，便于与已占用的默认端口并存：
+
+```sh
+QWENPAW_TL_PROXY_PORT=9089 QWENPAW_PERSONAL_PORT=9088 \
+QWENPAW_SERVICE_PORT=9092 QWENPAW_CONSOLE_PORT=5279 \
+npm run live:start
+```
+
+日志与 PID 都落在本目录：`logs/`（`tl-proxy.log`、`qwenpaw.log`、`service-api.log`、`native-console.log`）与 `.run/*.pid`。后端启动失败时先看 `logs/qwenpaw.log`：
+
+```sh
+tail -f logs/qwenpaw.log
+```
+
+### 停止
+
+```sh
+npm run live:stop
+```
+
+停止后端口 8088/8089/8092/5179 会一并释放。也可以直接运行脚本，它们与上面的 npm 命令等价：
+
+```sh
+./start.sh            # = npm run live:start
+./start-services.sh   # = npm run live:services
+./start-console.sh    # = npm run live:console
+./stop.sh             # = npm run live:stop
+```
+
+Windows 用同名 `.bat`：`start.bat` / `start-services.bat` / `start-console.bat` / `stop.bat`。
+
+### 验证路径
+
+启动后按下面顺序点一遍即可覆盖主要流程（两种模式都可用，用连接面板的「聊天模式」下拉框切换）：
+
+1. **服务聊天 /v1**（默认）：点「连接 / 检查」→ 页头应显示 `服务: <平台模型>` → 「+ 新建」→ 发消息 → 观察逐字流式正文、工具卡片、思考折叠块 → 「加载历史」验证回放 → 生成中「停止生成」验证取消。
+2. **本地 Console 管理**：切到 local 后连接 → 管理页读取模型配置 / 渠道列表 / 定时任务 → 工作区文件浏览、读取、改后保存（ETag 保护）、下载 → 收件箱与任务、智能体技能两个标签。
+3. **日志抽屉**：顶部「协议日志」与「模型诊断」支持筛选、展开、导出；Debug 勾选后诊断日志才由后端产生（后端还需 `QWENPAW_MODEL_DEBUG=1`）。
+
+### 连接不上时的排查
+
+| 现象                                             | 原因与处理                                                                                                                                                                                     |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 连接报 `HTTP 500: ""`                            | 代理目标没起来。确认 8088/8092 在监听：`npm run live:services`                                                                                                                                 |
+| 收件箱/技能标签 500                              | 同上，这两个标签走 `/api` → 8088                                                                                                                                                               |
+| `服务聊天 /v1` 连接失败                          | 8092 未就绪；看 `logs/service-api.log`。该服务也需要 `QWENPAW_SERVICE_TOKEN` 与它一致                                                                                                          |
+| 后端 45 秒未就绪                                 | 看 `logs/qwenpaw.log` 里的 traceback                                                                                                                                                           |
+| `Failed to initialize cache at ~/.cache/uv`      | 受限环境（容器/沙箱）不允许 uv 写家目录，给启动器换个缓存目录：`UV_CACHE_DIR=$PWD/.uvcache npm run live:start`                                                                                 |
+| 后端写 `~/.qwenpaw` 报 `Operation not permitted` | 受限环境不允许写家目录，把后端状态重定位到工作区内：`QWENPAW_WORKING_DIR=$PWD/.qwenpaw QWENPAW_SECRET_DIR=$PWD/.qwenpaw/secret npm run live:start`（这样也不会污染你真实的 `~/.qwenpaw` 配置） |
+
+`QWENPAW_WORKING_DIR` 会把后端配置、Agent 工作区和密钥全部放到指定目录，适合一次性验证或隔离多套环境。
 
 ## TL Provider 适配
 
@@ -147,15 +246,55 @@ Vitest 覆盖传输和消息归并的边界条件；Playwright 覆盖真实页�
 
 ## 文件结构
 
+页面按「装配根 → 壳层 → 各视图 → 各功能模块」分层。`main.ts` 只负责构建共享服务、
+挂载外壳并按依赖顺序接线，不再承载任何具体流程。
+
 ```text
-src/api.ts         统一请求、日志、脱敏、SSE 分帧
-src/chat.ts        QwenPaw 文本增量与快照归并
-src/main.ts        原生页面、流程和接口调用
-src/style.css      原生响应式样式
-tests/             Vitest 传输与协议边界测试
-e2e/               Playwright 隔离接口与页面流程验收
-scripts/           直接依赖白名单检查
+src/main.ts              装配根：服务实例、挂载外壳、模块接线、初始状态
+src/shell.ts             应用外壳：侧边栏、页头、连接面板、两个日志抽屉
+
+src/core/
+  dom.ts                 元素查询、节点构造、下拉选项、下载、逐帧合并
+  state.ts               唯一可变状态源（会话、文件、流、审批轮询）
+  app.ts                 busy 锁、run/action 包装、通知与聊天模式
+  tokens.css             设计令牌、元素重置、通用工具类
+  shell.css              外壳布局、侧边栏、页头、连接面板
+
+src/views/               每个视图的模板与样式同名成对，便于同处维护
+  chat.ts    chat.css    视图 1：核心会话
+  files.ts   files.css   视图 2：工作区文件（含检查点面板样式）
+  inbox.ts               视图 3：收件箱与任务（面板样式在 src/panels.css）
+  skills.ts              视图 4：智能体技能
+  management.ts/.css     视图 5：管理与配置
+
+src/features/
+  connect.ts             连接、登录、清除凭据、聊天模式切换
+  chat.ts                流式渲染、折叠时间线、工具卡片、审批、两种模式发送
+  sessions.ts            会话列表/新建/选择、侧边栏、服务会话
+  files.ts               目录浏览、分块读取、ETag 保存、上传下载
+  management.ts          模型、Provider、渠道、定时任务
+  logs.ts                协议日志与模型诊断两个抽屉
+  tabs.ts                侧边栏页签切换
+  logs.css               两个抽屉的样式
+
+src/panels.css           收件箱、模态框、技能面板样式
+src/style.css            样式清单：只声明 @import 顺序，构建后合并为单个 CSS
+
+src/api.ts               统一请求、日志、脱敏、SSE 分帧
+src/chat.ts              QwenPaw 文本增量与快照归并
+src/markdown.ts          受限 Markdown 渲染
+src/tools-render.ts      工具卡片渲染
+src/tl.ts / service.ts / inbox.ts / checkpoints.ts / skills.ts / context-monitor.ts
+                         既有的独立视图与服务模块
+tests/                   Vitest 传输与协议边界测试
+e2e/                     Playwright 隔离接口与页面流程验收
+scripts/                 直接依赖白名单检查
 ```
+
+重构保持了行为等价：元素 id、class、`data-testid`、文案与请求契约均未改动，
+48 项单元测试和 17 项浏览器测试在重构前后同样通过。内联 `style="..."` 已全部
+改为 `core/shell.css`、`views/*.css` 中的具名类，浏览器计算样式逐元素比对一致。
+`src/style.css` 使用普通 `@import`，Vite 会内联为单个产物样式表。
 
 ### 模型日志与 Debug
 

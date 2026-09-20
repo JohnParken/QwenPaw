@@ -32,6 +32,13 @@ class TLConfig(BaseModel):
     tool_calling_mode: Literal["system_prompt"] = "system_prompt"
     json_correction_max_attempts: int = Field(default=1, ge=0, le=1)
 
+    # A gateway reached directly must not be re-routed by HTTP_PROXY /
+    # HTTPS_PROXY environment variables or by the platform proxy settings: a
+    # forward proxy would rewrite, fail, or disclose an internal request.  The
+    # default keeps every TL attempt on a direct socket; deployments that
+    # genuinely need a forward proxy for the gateway can opt back in.
+    trust_env: bool = False
+
     timeout_seconds: float = Field(default=150.0, gt=0)
     stream_idle_timeout_seconds: float = Field(default=0.0, ge=0)
 

@@ -312,7 +312,10 @@ class TLTransport:
         if self._client is not None:
             yield self._client
             return
-        async with httpx.AsyncClient(timeout=None) as client:
+        async with httpx.AsyncClient(
+            timeout=None,
+            trust_env=self.config.trust_env,
+        ) as client:
             yield client
 
     async def init_session(self, system_prompt: str) -> str:

@@ -471,3 +471,39 @@ def test_config_rejects_invalid_mode_limits_and_non_finite_timeouts() -> None:
         TLConfig(timeout_seconds=float("inf"))
     with pytest.raises(ValidationError):
         TLConfig(max_request_bytes=True)
+
+
+def test_attempt_clients_ignore_environment_proxies_by_default() -> None:
+    assert TLConfig().trust_env is False
+    assert TLConfig(trust_env=True).trust_env is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("trust_env", [False, True])
+async def test_owned_client_proxy_trust_follows_config(
+    monkeypatch: pytest.MonkeyPatch,
+    trust_env: bool,
+) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("init_session"):
+            return httpx.Response(
+                200, json={"code": 0, "data": {"session_id": "s"}}
+            )
+        return httpx.Response(200, json={"code": 0, "data": {"txt": "ok"}})
+
+    real_client = httpx.AsyncClient
+    created: list[httpx.AsyncClient] = []
+
+    def make_client(**kwargs):
+        client = real_client(transport=httpx.MockTransport(handler), **kwargs)
+        created.append(client)
+        return client
+
+    monkeypatch.setattr(tl_transport_module.httpx, "AsyncClient", make_client)
+    transport = TLTransport("http://tl", TLConfig(trust_env=trust_env))
+
+    assert [
+        text async for text in transport.iter_text("sys", "user", stream=False)
+    ] == ["ok"]
+    assert len(created) == 1
+    assert created[0].trust_env is trust_env

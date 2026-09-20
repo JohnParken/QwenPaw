@@ -1,5 +1,8 @@
 # TL migration to multisync
 
+Historical migration record. For the current service baseline and startup instructions,
+see [Server v1](multi-user-server.md) and [TL setup](multi-user-tl.md).
+
 Source: local `office` commit `0465276cc0df7dde98fe3d56af3b20ca2120eb62`.
 The protocol specifications are preserved under `docs/skills/tl-llm-proxy` and
 `docs/skills/tl-llm-standalone`. Their design-era status wording is historical;
@@ -56,9 +59,9 @@ embedding endpoint, so TL definitions reject embedding_model and use scoped
 lexical memory retrieval. Ordinary registered TL providers still support their
 own custom headers through the existing provider configuration API.
 
-The main/local Console supports ephemeral preview events. The multi-user
-`/v1` Worker currently emits validated durable model/tool events, without
-opting into the local Console's ephemeral preview channel. Preview text never
+At the time of the initial port, preview events were limited to the local Console.
+Subsequent `/v1` streaming changes are documented in
+[streaming-tool-console.md](streaming-tool-console.md). Preview text never
 becomes an executable tool call.
 
 ## Test tools

@@ -12,6 +12,70 @@ def serve_cmd():
     """Run the BFF API, shared worker, controller, or sandbox service."""
 
 
+@serve_cmd.command("check")
+@click.option("--json", "as_json", is_flag=True, help="Emit a safe JSON summary.")
+def check(as_json):
+    """Validate production configuration offline; does not test connectivity."""
+    import json
+    from urllib.parse import parse_qs, urlsplit
+
+    from ..server.config import ServerConfig
+
+    # Validation exceptions may contain credentials; never render their inputs.
+    stage = "environment"
+    try:
+        config = ServerConfig.from_env()
+        stage = "database_url"
+        url = urlsplit(config.database_url.get_secret_value())
+        if (
+            url.scheme not in {"mysql", "mariadb", "tdsql"}
+            or not url.hostname
+            or not url.path.strip("/")
+            or url.fragment
+        ):
+            raise ValueError()
+        if url.port is not None and not 1 <= url.port <= 65535:
+            raise ValueError()
+        options = parse_qs(url.query, strict_parsing=True)
+        if set(options) - {"ssl_ca", "ssl_cert", "ssl_key", "connect_timeout"}:
+            raise ValueError()
+        if int(options.get("connect_timeout", ["10"])[0]) <= 0:
+            raise ValueError()
+        stage = "assistant_definition"
+        definition = config.definition()
+    except Exception:
+        if as_json:
+            click.echo(json.dumps({"ok": False, "stage": stage}))
+            raise click.exceptions.Exit(1) from None
+        raise click.ClickException(
+            f"Invalid {stage}; check configuration (values withheld)."
+        ) from None
+    result = {
+        "ok": True,
+        "profile": "v1-production",
+        "connectivity_checked": False,
+        "model_protocol": definition.model_protocol,
+        "controller_required": True,
+        "sandbox_tools": sum(t.execution == "sandbox" for t in definition.tools),
+        "service_tools": sum(t.execution == "service" for t in definition.tools),
+        "storage": "tdsql",
+        "redis_enabled": bool(config.redis_url),
+        "concurrency": config.concurrency,
+        "per_user_concurrency": config.per_user_concurrency,
+    }
+    if as_json:
+        click.echo(json.dumps(result))
+    else:
+        click.echo("/v1 production configuration valid (offline only).")
+        click.echo(
+            "Required: TDSQL, model service, API, Worker, Controller; files use S3."
+        )
+        click.echo("The production Controller uses Kubernetes and session storage.")
+        click.echo(
+            "No database, model, Controller or object-storage connection was tested."
+        )
+
+
 async def _components():
     from ..server.config import ServerConfig
     from ..server.storage import create_repository

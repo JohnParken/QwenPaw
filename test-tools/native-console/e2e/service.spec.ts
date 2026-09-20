@@ -1,6 +1,11 @@
 import { expect } from "@playwright/test";
 import { test } from "./fixtures";
 
+test("默认聊天模式为服务模式", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("#chat-mode")).toHaveValue("service");
+});
+
 test("服务聊天使用 /v1 契约并按事件顺序呈现工具与预览", async ({ page }) => {
   const calls: { method: string; path: string; body: any }[] = [];
   let externalSession = "";
