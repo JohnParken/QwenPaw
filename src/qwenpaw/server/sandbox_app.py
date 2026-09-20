@@ -9,7 +9,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import StreamingResponse
+
 from .sandbox_tools import SandboxTools
+
+_STREAM_QUEUE_SIZE = 64
+_MAX_NDJSON_LINE = 16 * 1024 * 1024
 
 
 def create_sandbox_app(root: Path, token: str) -> FastAPI:
@@ -46,9 +51,132 @@ def create_sandbox_app(root: Path, token: str) -> FastAPI:
         if not value or not hmac.compare_digest(value, f"Bearer {token}"):
             raise HTTPException(401, "Invalid sandbox credential")
 
+    def ndjson(event):
+        line = (
+            json.dumps(event, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            + b"\n"
+        )
+        if len(line) > _MAX_NDJSON_LINE:
+            raise RuntimeError("Sandbox NDJSON event exceeds buffer limit")
+        return line
+
+    async def reserve(call_id, name, args, supplied_epoch, digest):
+        nonlocal epoch
+        acquired = False
+        try:
+            await serial.acquire()
+            acquired = True
+            # Recheck after waiting for the serial gate; stop fences queued requests too.
+            if stopped or supplied_epoch < epoch:
+                raise HTTPException(409, "Sandbox stopped or stale epoch")
+            epoch = supplied_epoch
+            if call_id in cache:
+                old_digest, result = cache[call_id]
+                if old_digest != digest:
+                    raise HTTPException(409, "Conflicting tool call ID")
+                serial.release()
+                return digest, result
+            if len(cache) >= 10000:
+                raise HTTPException(429, "Sandbox call limit reached; recycle sandbox")
+            result = {"call_id": call_id, "status": "unknown"}
+            cache[call_id] = (digest, result)
+            return digest, None
+        except BaseException:
+            if acquired:
+                serial.release()
+            raise
+
+    async def execute_invocation(
+        call_id,
+        name,
+        args,
+        timeout,
+        digest,
+        stream_queue=None,
+    ):
+        nonlocal cache_bytes
+        interrupted = False
+
+        async def emit(stream, text):
+            if stream_queue is not None:
+                await stream_queue.put(
+                    {"type": "output", "stream": stream, "text": text}
+                )
+
+        async def execute():
+            method = getattr(tools, name)
+            if name == "shell":
+                if stream_queue is None:
+                    return await method(**args, timeout=timeout)
+                return await method(**args, timeout=timeout, on_output=emit)
+            return await method(**args)
+
+        task = asyncio.create_task(execute())
+        invocation = asyncio.current_task()
+        result = {"call_id": call_id, "status": "unknown"}
+        try:
+            try:
+                value = await asyncio.wait_for(task, timeout)
+                result = {"call_id": call_id, "status": "ok", "result": value}
+            except asyncio.CancelledError:
+                interrupted = True
+                result = {
+                    "call_id": call_id,
+                    "status": "unknown",
+                    "error": "interrupted",
+                }
+            except asyncio.TimeoutError:
+                result = {"call_id": call_id, "status": "unknown", "error": "timeout"}
+            except Exception as exc:
+                message = str(exc)[:2000]
+                result = {
+                    "call_id": call_id,
+                    "status": "error",
+                    "error": message,
+                    "result": {"status": "error", "error": message},
+                }
+            if stream_queue is not None:
+                terminal = {"type": "result", "result": result}
+                await finish_stream(stream_queue, terminal, interrupted)
+            return result
+        finally:
+            if invocation is not None:
+                active.discard(invocation)
+            size = len(json.dumps(result, ensure_ascii=False).encode("utf-8"))
+            if cache_bytes + size > 64 * 1024 * 1024:
+                cache[call_id] = (
+                    digest,
+                    {
+                        "call_id": call_id,
+                        "status": "unknown",
+                        "error": "result_cache_limit",
+                    },
+                )
+            else:
+                cache_bytes += size
+                cache[call_id] = (digest, result)
+            serial.release()
+
+    async def cached_stream(result):
+        yield ndjson({"type": "result", "result": result})
+
+    async def finish_stream(stream_queue, terminal, interrupted):
+        if not interrupted:
+            await stream_queue.put(terminal)
+            await stream_queue.put(None)
+            return
+        # Reserve two slots for the terminal and sentinel. A disconnected
+        # consumer must never leave cancellation cleanup waiting on a full queue.
+        while stream_queue.qsize() > stream_queue.maxsize - 2:
+            try:
+                stream_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+        stream_queue.put_nowait(terminal)
+        stream_queue.put_nowait(None)
+
     @app.post("/invoke")
     async def invoke(payload: dict, authorization: str = Header(default="")):
-        nonlocal epoch, cache_bytes
         auth(authorization)
         call_id, name = payload.get("call_id"), payload.get("name")
         args = payload.get("arguments", {})
@@ -73,63 +201,36 @@ def create_sandbox_app(root: Path, token: str) -> FastAPI:
         except (ValueError, TypeError) as exc:
             raise HTTPException(400, "Invalid timeout") from exc
         digest = tools.digest(name, args)
-        async with serial:
-            # Recheck after waiting for the serial gate; stop fences queued requests too.
-            if stopped or supplied_epoch < epoch:
-                raise HTTPException(409, "Sandbox stopped or stale epoch")
-            epoch = supplied_epoch
-            if call_id in cache:
-                old_digest, result = cache[call_id]
-                if old_digest != digest:
-                    raise HTTPException(409, "Conflicting tool call ID")
-                return result
-            if len(cache) >= 10000:
-                raise HTTPException(429, "Sandbox call limit reached; recycle sandbox")
-            result = {"call_id": call_id, "status": "unknown"}
-            cache[call_id] = (digest, result)
+        streaming = payload.get("stream") is True
+        _, cached = await reserve(call_id, name, args, supplied_epoch, digest)
+        if cached is not None:
+            if streaming:
+                return StreamingResponse(
+                    cached_stream(cached), media_type="application/x-ndjson"
+                )
+            return cached
 
-            async def execute():
-                method = getattr(tools, name)
-                if name == "shell":
-                    return await method(**args, timeout=timeout)
-                return await method(**args)
+        queue = asyncio.Queue(maxsize=_STREAM_QUEUE_SIZE) if streaming else None
+        task = asyncio.create_task(
+            execute_invocation(call_id, name, args, timeout, digest, stream_queue=queue)
+        )
+        active.add(task)
+        if not streaming:
+            return await task
 
-            task = asyncio.create_task(execute())
-            active.add(task)
+        async def events():
             try:
-                value = await asyncio.wait_for(task, timeout)
-                result = {"call_id": call_id, "status": "ok", "result": value}
-            except asyncio.CancelledError:
-                result = {
-                    "call_id": call_id,
-                    "status": "unknown",
-                    "error": "interrupted",
-                }
-            except asyncio.TimeoutError:
-                result = {"call_id": call_id, "status": "unknown", "error": "timeout"}
-            except Exception as exc:
-                result = {
-                    "call_id": call_id,
-                    "status": "error",
-                    "error": str(exc)[:2000],
-                    "result": {"status": "error", "error": str(exc)[:2000]},
-                }
+                while True:
+                    event = await queue.get()
+                    if event is None:
+                        return
+                    yield ndjson(event)
             finally:
-                active.discard(task)
-                size = len(json.dumps(result).encode())
-                if cache_bytes + size > 64 * 1024 * 1024:
-                    cache[call_id] = (
-                        digest,
-                        {
-                            "call_id": call_id,
-                            "status": "unknown",
-                            "error": "result_cache_limit",
-                        },
-                    )
-                else:
-                    cache_bytes += size
-                    cache[call_id] = (digest, result)
-            return result
+                if not task.done():
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+
+        return StreamingResponse(events(), media_type="application/x-ndjson")
 
     @app.post("/stop")
     async def stop(authorization: str = Header(default="")):

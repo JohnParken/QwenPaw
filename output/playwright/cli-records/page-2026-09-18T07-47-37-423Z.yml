@@ -1,0 +1,111 @@
+- generic [ref=f38e2]:
+  - complementary [ref=f38e3]:
+    - generic [ref=f38e5]:
+      - generic [ref=f38e6]: 🐾
+      - generic [ref=f38e7]:
+        - heading "QwenPaw Native" [level=1] [ref=f38e8]:
+          - text: QwenPaw
+          - generic [ref=f38e9]: Native
+        - paragraph [ref=f38e10]: 轻量原生测试验证台
+    - generic [ref=f38e11]:
+      - generic [ref=f38e12]:
+        - generic [ref=f38e13]: 当前生效 Agent
+        - generic [ref=f38e14]: Service
+      - combobox "切换当前 Agent" [disabled] [ref=f38e15] [cursor=pointer]:
+        - option "default" [selected]
+    - navigation "功能页" [ref=f38e16]:
+      - button "💬 核心会话" [ref=f38e17] [cursor=pointer]:
+        - generic [ref=f38e18]: 💬
+        - text: 核心会话
+      - button "📁 工作区文件" [ref=f38e19] [cursor=pointer]:
+        - generic [ref=f38e20]: 📁
+        - text: 工作区文件
+      - button "📥 收件箱与任务" [ref=f38e21] [cursor=pointer]:
+        - generic [ref=f38e22]: 📥
+        - text: 收件箱与任务
+      - button "🧩 智能体技能" [ref=f38e23] [cursor=pointer]:
+        - generic [ref=f38e24]: 🧩
+        - text: 智能体技能
+      - button "⚙️ 管理与配置" [ref=f38e25] [cursor=pointer]:
+        - generic [ref=f38e26]: ⚙️
+        - text: 管理与配置
+    - generic [ref=f38e27]:
+      - generic [ref=f38e28]:
+        - generic [ref=f38e29]: 会话列表
+        - generic [ref=f38e30]:
+          - button "+ 新建" [ref=f38e31] [cursor=pointer]
+          - button "刷新" [ref=f38e32] [cursor=pointer]
+      - button "cf19e9b0-7c8c-4213-847b-2a3b28164108" [ref=f38e110] [cursor=pointer]
+      - combobox [ref=f38e34]:
+        - option "选择服务会话" [selected]
+        - option "cf19e9b0-7c8c-4213-847b-2a3b28164108"
+    - button "服务已连接 · default" [ref=f38e112] [cursor=pointer]
+  - generic [ref=f38e39]:
+    - banner [ref=f38e40]:
+      - generic [ref=f38e41]:
+        - generic [ref=f38e42]: 未选择服务会话
+        - generic [ref=f38e43]: "服务: mock-stream-demo"
+        - generic [ref=f38e45]: 服务聊天 /v1
+      - generic [ref=f38e46]:
+        - generic [ref=f38e113]:
+          - generic [ref=f38e114]: "Context: 就绪"
+          - generic [ref=f38e115]: 等待对话生成以计算窗口消耗
+        - generic [ref=f38e54]: 流式状态：空闲
+        - button "📋 协议日志 3" [ref=f38e116] [cursor=pointer]:
+          - generic [ref=f38e56]: 📋 协议日志
+          - generic [ref=f38e57]: "3"
+    - group "连接现有后端" [ref=f38e59]:
+      - generic [ref=f38e61]:
+        - generic [ref=f38e62]: 🔗 后端连接与凭据
+        - paragraph [ref=f38e63]: 服务已连接 · ok · 用户 default
+      - generic [ref=f38e64]:
+        - generic [ref=f38e65]:
+          - text: 聊天模式
+          - combobox "聊天模式" [ref=f38e66]:
+            - option "本地 Console 管理"
+            - option "服务聊天 /v1" [selected]
+        - generic [ref=f38e67]: "开发用户: default · token 仅由 Vite 代理注入"
+        - generic [ref=f38e68]:
+          - generic [ref=f38e69]:
+            - text: 访问令牌
+            - textbox "访问令牌" [disabled] [ref=f38e70]:
+              - /placeholder: 未启用鉴权可留空
+          - button "连接 / 检查" [ref=f38e71] [cursor=pointer]
+          - button "清除凭据" [disabled] [ref=f38e72] [cursor=pointer]
+        - group [ref=f38e73]:
+          - generic "使用账号密码登录" [ref=f38e74] [cursor=pointer]
+    - status [ref=f38e75]: 连接成功
+    - generic [ref=f38e76]:
+      - group "功能验证" [ref=f38e77]:
+        - generic [ref=f38e79]:
+          - log "聊天消息" [ref=f38e80]
+          - generic [ref=f38e81]:
+            - generic [ref=f38e82]: "⚡ 快捷能力测试:"
+            - button "基础问答" [ref=f38e83] [cursor=pointer]
+            - button "深度推理 (R1)" [ref=f38e84] [cursor=pointer]
+            - button "文件读写工具" [ref=f38e85] [cursor=pointer]
+            - button "Shell 工具" [ref=f38e86] [cursor=pointer]
+            - button "触发安全审批" [ref=f38e87] [cursor=pointer]
+          - generic [ref=f38e89]:
+            - textbox "输入给 QwenPaw Agent 的指令... (Enter 发送，Shift+Enter 换行)" [ref=f38e90]
+            - generic [ref=f38e91]:
+              - generic [ref=f38e92]:
+                - generic [ref=f38e93] [cursor=pointer]: 📎 上传附件
+                - generic [ref=f38e117]: 当前服务未启用附件存储
+                - button "加载历史" [ref=f38e94] [cursor=pointer]
+              - button "发送 ↵" [ref=f38e96] [cursor=pointer]
+      - complementary [ref=f38e97]:
+        - generic [ref=f38e98]:
+          - heading "📋 接口与 SSE 请求日志" [level=2] [ref=f38e99]
+          - generic [ref=f38e100]:
+            - button "导出" [ref=f38e101] [cursor=pointer]
+            - button "清空" [ref=f38e102] [cursor=pointer]
+            - button "✕" [ref=f38e103] [cursor=pointer]
+        - textbox "筛选接口，例如 /console/chat 或 401" [ref=f38e105]
+        - generic [ref=f38e106]:
+          - group [ref=f38e118]:
+            - generic "GET /api/service/sessions?limit=100 · 200 · 3 ms" [ref=f38e119] [cursor=pointer]
+          - group [ref=f38e120]:
+            - generic "GET /api/service/assistant · 200 · 3 ms" [ref=f38e121] [cursor=pointer]
+          - group [ref=f38e122]:
+            - generic "GET /api/service/health · 200 · 17 ms" [ref=f38e123] [cursor=pointer]

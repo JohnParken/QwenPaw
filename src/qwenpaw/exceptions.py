@@ -689,6 +689,27 @@ def _is_model_related_error(exc: Exception) -> bool:
     return False
 
 
+def _unwrap_single_exception_group(exc: Exception) -> Exception:
+    """Unwrap nested exception groups that contain exactly one exception.
+
+    Concurrent tool execution wraps a single provider failure in an
+    ``ExceptionGroup``.  Treating that wrapper as the failure hides typed
+    provider diagnostics such as ``TLError`` behind UNKNOWN_AGENT_ERROR.
+    Groups with multiple failures remain intact because choosing one would
+    discard potentially relevant errors.
+    """
+    current = exc
+    while (
+        isinstance(current, BaseExceptionGroup)
+        and len(current.exceptions) == 1
+    ):
+        nested = current.exceptions[0]
+        if not isinstance(nested, Exception):
+            break
+        current = nested
+    return current
+
+
 def convert_model_exception(  # pylint: disable=too-many-return-statements
     exc: Exception,
     model_name: Optional[str] = None,
@@ -702,11 +723,19 @@ def convert_model_exception(  # pylint: disable=too-many-return-statements
     Returns:
         AgentRuntimeErrorException with original details preserved
     """
+    # Preserve the wrapper for diagnostics while classifying the single
+    # concrete failure produced by concurrent tool execution.
+    original_exc = exc
+    exc = _unwrap_single_exception_group(exc)
+
     # Build details with original exception info
     details = {
-        "original_error_type": type(exc).__name__,
-        "original_error_message": str(exc),
+        "original_error_type": type(original_exc).__name__,
+        "original_error_message": str(original_exc),
     }
+    if exc is not original_exc:
+        details["underlying_error_type"] = type(exc).__name__
+        details["underlying_error_message"] = str(exc)
 
     # TL carries typed stages. Model-produced field names/messages must not
     # be interpreted as authentication keywords (e.g. "invalid keys").

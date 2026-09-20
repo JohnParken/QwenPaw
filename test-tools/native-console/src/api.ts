@@ -10,11 +10,25 @@ export interface LogEntry {
   events: unknown[];
   eventCount: number;
 }
+
+export interface RequestOptions {
+  method?: string;
+  body?: unknown;
+  headers?: Record<string, string>;
+  signal?: AbortSignal;
+  onEvent?: (data: unknown, event: string, id?: string) => void;
+  blob?: boolean;
+  timeoutMs?: number;
+  /** Service requests never receive the local-console browser credential. */
+  service?: boolean;
+}
 const secretKey =
   /password|passwd|secret|token|authorization|cookie|api[_-]?key|credential/i;
 export class ApiClient {
   token = "";
   agent = "default";
+  /** Enables safe console.debug transport traces from the UI Debug toggle. */
+  verboseLogging = false;
   logs: LogEntry[] = [];
   onLog: () => void = () => {};
   private serial = 0;
@@ -27,24 +41,29 @@ export class ApiClient {
       else this.remember(item);
     }
   }
-  safe(value: unknown): unknown {
+  safe(value: unknown, depth = 0): unknown {
+    if (depth >= 8) return "[depth truncated]";
     if (value instanceof FormData)
-      return Array.from(value.entries()).map(([key, item]) => ({
-        field: key,
-        value: secretKey.test(key)
-          ? "[REDACTED]"
-          : item instanceof File
-            ? { name: item.name, size: item.size, type: item.type }
-            : this.safe(item),
-      }));
+      return Array.from(value.entries())
+        .slice(0, 150)
+        .map(([key, item]) => ({
+          field: key,
+          value: secretKey.test(key)
+            ? "[REDACTED]"
+            : item instanceof File
+              ? { name: item.name, size: item.size, type: item.type }
+              : this.safe(item, depth + 1),
+        }));
     if (Array.isArray(value))
-      return value.slice(0, 150).map((v) => this.safe(v));
+      return value.slice(0, 150).map((v) => this.safe(v, depth + 1));
     if (value && typeof value === "object")
       return Object.fromEntries(
-        Object.entries(value).map(([k, v]) => [
-          k,
-          secretKey.test(k) ? "[REDACTED]" : this.safe(v),
-        ]),
+        Object.entries(value)
+          .slice(0, 150)
+          .map(([k, v]) => [
+            k,
+            secretKey.test(k) ? "[REDACTED]" : this.safe(v, depth + 1),
+          ]),
       );
     if (typeof value === "string") {
       let result = value;
@@ -61,25 +80,39 @@ export class ApiClient {
     this.logs = [];
     this.onLog();
   }
+
+  setVerboseLogging(enabled: boolean): void {
+    this.verboseLogging = enabled;
+  }
+
+  private debug(label: string, value: unknown): void {
+    if (!this.verboseLogging) return;
+    console.debug(`[native-console] ${label}`, this.safe(value));
+  }
+
+  private error(label: string, value: unknown): void {
+    console.error(`[native-console] ${label}`, this.safe(value));
+  }
+
   async request<T = unknown>(
     path: string,
-    options: {
-      method?: string;
-      body?: unknown;
-      headers?: Record<string, string>;
-      signal?: AbortSignal;
-      onEvent?: (data: unknown, event: string) => void;
-      blob?: boolean;
-      timeoutMs?: number;
-    } = {},
+    options: RequestOptions = {},
   ): Promise<T> {
     if (!path.startsWith("/api/") || path.includes("://"))
       throw new Error("Only same-origin /api/ requests are allowed");
     this.remember(options.body);
     const started = performance.now();
     const headers = new Headers(options.headers);
-    headers.set("X-Agent-Id", this.agent);
-    if (this.token) headers.set("Authorization", `Bearer ${this.token}`);
+    if (options.service) {
+      // A service token belongs to the Vite proxy. Never let a page-local
+      // management token or a caller-supplied Authorization header cross the
+      // service boundary.
+      headers.delete("Authorization");
+      headers.delete("authorization");
+    } else {
+      headers.set("X-Agent-Id", this.agent);
+      if (this.token) headers.set("Authorization", `Bearer ${this.token}`);
+    }
     let body: BodyInit | undefined;
     if (options.body instanceof FormData) body = options.body;
     else if (options.body !== undefined) {
@@ -109,12 +142,16 @@ export class ApiClient {
     options.signal?.addEventListener("abort", abort, { once: true });
     // For streams this is an inactivity timeout, refreshed on every event.
     let timer: ReturnType<typeof setTimeout>;
+    let timedOut = false;
     const resetTimer = () => {
       clearTimeout(timer);
       const timeout = options.timeoutMs ?? 60000;
       if (timeout > 0)
         timer = setTimeout(
-          () => controller.abort(new Error("请求超时")),
+          () => {
+            timedOut = true;
+            controller.abort(new Error("请求超时"));
+          },
           Math.min(timeout, 2147483647),
         );
     };
@@ -127,6 +164,12 @@ export class ApiClient {
         signal: controller.signal,
       });
       log.status = response.status;
+      this.debug("response", {
+        method: log.method,
+        url: path,
+        status: response.status,
+        contentType: response.headers.get("content-type") || "",
+      });
       this.onLog();
       if (options.onEvent && response.ok) {
         if (
@@ -134,7 +177,7 @@ export class ApiClient {
         )
           throw new Error("Expected text/event-stream response");
         if (!response.body) throw new Error("Response has no stream");
-        await readSSE(response.body, (raw, event) => {
+        await readSSE(response.body, (raw, event, id) => {
           resetTimer();
           let data: unknown = raw;
           if (raw !== "[DONE]") {
@@ -146,11 +189,12 @@ export class ApiClient {
           }
           this.remember(data);
           log.eventCount++;
-          log.events.push(this.safe({ event, data }));
+          log.events.push(this.safe({ event, id, data }));
           if (log.events.length > 100) log.events.shift();
           log.duration = Math.round(performance.now() - started);
           this.onLog();
-          options.onEvent!(data, event);
+          this.debug("SSE event", { url: path, event, id, data });
+          options.onEvent!(data, event, id);
         });
         log.response = { stream: "closed", eventCount: log.eventCount };
         return undefined as T;
@@ -177,11 +221,19 @@ export class ApiClient {
         );
       return data as T;
     } catch (error) {
-      if (controller.signal.aborted) log.status = "aborted";
+      if (timedOut) log.status = "timeout";
+      else if (controller.signal.aborted) log.status = "aborted";
       else if (log.status === "pending") log.status = "network-error";
       log.response = this.safe({
         error: error instanceof Error ? error.message : String(error),
       });
+      if (timedOut || !controller.signal.aborted)
+        this.error("request failed", {
+          method: log.method,
+          url: path,
+          status: log.status,
+          error: error instanceof Error ? error.message : String(error),
+        });
       throw error;
     } finally {
       clearTimeout(timer!);
@@ -190,20 +242,33 @@ export class ApiClient {
       this.onLog();
     }
   }
+
+  serviceRequest<T = unknown>(
+    path: string,
+    options: Omit<RequestOptions, "service"> = {},
+  ): Promise<T> {
+    if (!path.startsWith("/"))
+      throw new Error("Service paths must start with '/'");
+    return this.request<T>(`/api/service${path}`, {
+      ...options,
+      service: true,
+    });
+  }
 }
 
 // Handles CR/LF/CRLF across byte chunks, UTF-8 boundaries and multi-line data.
 export async function readSSE(
   stream: ReadableStream<Uint8Array>,
-  emit: (data: string, event: string) => void,
+  emit: (data: string, event: string, id?: string) => void,
 ): Promise<void> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let lines: string[] = [];
   let event = "message";
+  let eventId: string | undefined;
   const dispatch = () => {
-    if (lines.length) emit(lines.join("\n"), event);
+    if (lines.length) emit(lines.join("\n"), event, eventId);
     lines = [];
     event = "message";
   };
@@ -216,6 +281,7 @@ export async function readSSE(
     const data = raw.startsWith(" ") ? raw.slice(1) : raw;
     if (field === "data") lines.push(data);
     if (field === "event") event = data;
+    if (field === "id" && !data.includes("\0")) eventId = data;
   };
   try {
     for (;;) {

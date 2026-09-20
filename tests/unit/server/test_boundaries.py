@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -12,6 +13,18 @@ from qwenpaw.server.contracts import ExecutionContext, RuntimeServices, Conflict
 from qwenpaw.server.controller import Kubernetes
 from qwenpaw.server.sandbox_app import create_sandbox_app
 from qwenpaw.server.tools import ToolGateway
+
+
+def python_command(source: str) -> str:
+    """Return a shell command that runs *source* on this interpreter.
+
+    Both argv entries are double-quoted, a form POSIX ``sh`` and Windows
+    ``cmd.exe`` both accept, so the sandbox tests do not depend on a
+    POSIX-only shell.  *source* must therefore avoid double quotes.
+    """
+    if '"' in source:
+        raise ValueError("source must not contain double quotes")
+    return f'"{sys.executable}" -c "{source}"'
 
 
 @pytest.mark.asyncio
@@ -30,7 +43,9 @@ async def test_stop_fences_waiting_call_and_unknown_result(tmp_path):
                     "epoch": 7,
                     "name": "shell",
                     "timeout": 60,
-                    "arguments": {"command": "sleep 30"},
+                    "arguments": {
+                        "command": python_command("import time; time.sleep(30)")
+                    },
                 },
             )
         )
@@ -56,7 +71,11 @@ async def test_stop_fences_waiting_call_and_unknown_result(tmp_path):
 
 @pytest.mark.asyncio
 async def test_sandbox_epoch_symlink_and_timeout(tmp_path):
-    (tmp_path / "escape").symlink_to(tmp_path.parent)
+    try:
+        (tmp_path / "escape").symlink_to(tmp_path.parent)
+    except (OSError, NotImplementedError):
+        # Creating symlinks on Windows needs Developer Mode or admin rights.
+        pytest.skip("host cannot create symlinks (Windows privilege)")
     headers = {"Authorization": "Bearer secret"}
     app = create_sandbox_app(tmp_path, "secret")
     async with httpx.AsyncClient(
@@ -80,7 +99,7 @@ async def test_sandbox_epoch_symlink_and_timeout(tmp_path):
             epoch=3,
             name="shell",
             timeout=0.05,
-            arguments={"command": "sleep 10"},
+            arguments={"command": python_command("import time; time.sleep(10)")},
         )
         result = await client.post("/invoke", headers=headers, json=body)
         assert result.json()["status"] == "unknown"
@@ -113,6 +132,8 @@ def test_kubernetes_pod_has_only_session_mount_and_no_platform_secrets():
 async def test_duplicate_or_failed_remote_tool_never_falls_back():
     repo = SimpleNamespace(
         begin_tool=AsyncMock(return_value={"created": False, "status": "unknown"}),
+        validate_execution=AsyncMock(),
+        append=AsyncMock(),
         end_tool=AsyncMock(),
     )
     remote = SimpleNamespace(invoke=AsyncMock())

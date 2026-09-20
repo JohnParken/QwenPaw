@@ -1,0 +1,109 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 🐾
+      - generic [ref=e7]:
+        - heading "QwenPaw Native" [level=1] [ref=e8]:
+          - text: QwenPaw
+          - generic [ref=e9]: Native
+        - paragraph [ref=e10]: 轻量原生测试验证台
+    - generic [ref=e11]:
+      - generic [ref=e12]:
+        - generic [ref=e13]: 当前生效 Agent
+        - generic [ref=e14]: Service
+      - combobox "切换当前 Agent" [ref=e15] [cursor=pointer]:
+        - option "default" [selected]
+    - navigation "功能页" [ref=e16]:
+      - button "💬 核心会话" [ref=e17] [cursor=pointer]:
+        - generic [ref=e18]: 💬
+        - text: 核心会话
+      - button "📁 工作区文件" [ref=e19] [cursor=pointer]:
+        - generic [ref=e20]: 📁
+        - text: 工作区文件
+      - button "📥 收件箱与任务" [ref=e21] [cursor=pointer]:
+        - generic [ref=e22]: 📥
+        - text: 收件箱与任务
+      - button "🧩 智能体技能" [ref=e23] [cursor=pointer]:
+        - generic [ref=e24]: 🧩
+        - text: 智能体技能
+      - button "⚙️ 管理与配置" [ref=e25] [cursor=pointer]:
+        - generic [ref=e26]: ⚙️
+        - text: 管理与配置
+    - generic [ref=e27]:
+      - generic [ref=e28]:
+        - generic [ref=e29]: 会话列表
+        - generic [ref=e30]:
+          - button "+ 新建" [ref=e31] [cursor=pointer]
+          - button "刷新" [ref=e32] [cursor=pointer]
+      - combobox [ref=e34]:
+        - option "选择会话" [selected]
+    - button "未连接" [ref=e36] [cursor=pointer]
+  - generic [ref=e39]:
+    - banner [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e42]: 未选择会话
+        - generic [ref=e43]: 默认模型：tlproxy / deepseek-v4-flash · TL 仅文本
+        - generic [ref=e44]: "Agent: default"
+        - generic [ref=e45]: 服务聊天 /v1
+      - generic [ref=e46]:
+        - generic [ref=e107]:
+          - generic [ref=e108]: "Context: 就绪"
+          - generic [ref=e109]: 等待对话生成以计算窗口消耗
+        - generic "Tool Guard 工具安全审批策略" [ref=e51]:
+          - generic [ref=e52]: 审批策略
+          - combobox [ref=e53] [cursor=pointer]:
+            - option "AUTO (全自动免密)"
+            - option "SMART (智能高危审批)" [selected]
+            - option "STRICT (严格全部审批)"
+            - option "OFF (关闭审批限制)"
+        - generic [ref=e54]: 流式状态：空闲
+        - button "📋 协议日志 0" [ref=e55] [cursor=pointer]:
+          - generic [ref=e56]: 📋 协议日志
+          - generic [ref=e57]: "0"
+    - group "连接现有后端" [ref=e59]:
+      - generic [ref=e61]:
+        - generic [ref=e62]: 🔗 后端连接与凭据
+        - paragraph [ref=e63]: 服务模式使用 /api/service → /v1；管理页仍连接本地 /api。
+      - generic [ref=e64]:
+        - generic [ref=e65]:
+          - text: 聊天模式
+          - combobox "聊天模式" [ref=e66]:
+            - option "本地 Console 管理"
+            - option "服务聊天 /v1" [selected]
+        - generic [ref=e67]: "开发用户: default · token 仅由 Vite 代理注入"
+        - generic [ref=e68]:
+          - generic [ref=e69]:
+            - text: 访问令牌
+            - textbox "访问令牌" [disabled] [ref=e70]:
+              - /placeholder: 未启用鉴权可留空
+          - button "连接 / 检查" [ref=e71] [cursor=pointer]
+          - button "清除凭据" [disabled] [ref=e72] [cursor=pointer]
+        - group [ref=e73]:
+          - generic "使用账号密码登录" [ref=e74] [cursor=pointer]
+    - status [ref=e75]: 已切换服务聊天模式，请连接服务
+    - generic [ref=e76]:
+      - group "功能验证" [ref=e77]:
+        - generic [ref=e79]:
+          - log "聊天消息" [ref=e80]
+          - generic [ref=e81]:
+            - generic [ref=e82]: "⚡ 快捷能力测试:"
+            - button "基础问答" [ref=e83] [cursor=pointer]
+            - button "深度推理 (R1)" [ref=e84] [cursor=pointer]
+            - button "文件读写工具" [ref=e85] [cursor=pointer]
+            - button "Shell 工具" [ref=e86] [cursor=pointer]
+            - button "触发安全审批" [ref=e87] [cursor=pointer]
+          - generic [ref=e89]:
+            - textbox "输入给 QwenPaw Agent 的指令... (Enter 发送，Shift+Enter 换行)" [ref=e90]
+            - generic [ref=e91]:
+              - generic [ref=e92]:
+                - generic [ref=e93] [cursor=pointer]: 📎 上传附件
+                - button "加载历史" [ref=e94] [cursor=pointer]
+              - button "发送 ↵" [ref=e96] [cursor=pointer]
+      - complementary [ref=e97]:
+        - generic [ref=e98]:
+          - heading "📋 接口与 SSE 请求日志" [level=2] [ref=e99]
+          - generic [ref=e100]:
+            - button "导出" [ref=e101] [cursor=pointer]
+            - button "清空" [ref=e102] [cursor=pointer]
+            - button "✕" [ref=e103] [cursor=pointer]
+        - textbox "筛选接口，例如 /console/chat 或 401" [ref=e105]

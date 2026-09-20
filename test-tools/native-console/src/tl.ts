@@ -64,6 +64,7 @@ const el = <T extends HTMLElement = HTMLElement>(id: string) =>
 const val = (id: string) => el<HTMLInputElement>(id).value;
 
 export class TLPanel {
+  usesTextAttachments = false;
   private providers: RecordValue[] = [];
   private active: RecordValue = {};
   constructor(
@@ -190,7 +191,7 @@ export class TLPanel {
       (item) => item.id === active.active_llm?.provider_id,
     );
     el("chat-provider").textContent = activeProvider
-      ? `当前模型：${activeProvider.id} / ${active.active_llm?.model} · ${activeProvider.chat_model === "TLChatModel" ? "TL 仅文本，附件不可用" : activeProvider.chat_model || "常规模型"}`
+      ? `当前模型：${activeProvider.id} / ${active.active_llm?.model} · ${activeProvider.chat_model === "TLChatModel" ? "TL 文档附件自动解析为文本" : activeProvider.chat_model || "常规模型"}`
       : defaultTl
         ? `默认模型：${defaultTl.id} / deepseek-v4-flash · TL 仅文本`
         : "当前 Agent 尚未设置模型";
@@ -297,11 +298,11 @@ export class TLPanel {
       (item) => item.id === active.active_llm?.provider_id,
     );
     el("chat-provider").textContent =
-      `当前模型：${active.active_llm?.provider_id || "未设置"} / ${active.active_llm?.model || "未设置"}${provider?.chat_model === "TLChatModel" ? " · TL 仅文本，附件不可用" : ""}`;
-    if (provider?.chat_model !== "TLChatModel") return 60000;
-    if (hasAttachment)
-      throw new Error("TL v1 仅支持文本输入，请移除附件后发送");
-    const idle = Number(provider.tl_config?.stream_idle_timeout_seconds ?? 0);
+      `当前模型：${active.active_llm?.provider_id || "未设置"} / ${active.active_llm?.model || "未设置"}${provider?.chat_model === "TLChatModel" ? " · TL 文档附件自动解析为文本" : ""}`;
+    this.usesTextAttachments = provider?.chat_model === "TLChatModel";
+    if (!this.usesTextAttachments) return 60000;
+    void hasAttachment;
+    const idle = Number(provider?.tl_config?.stream_idle_timeout_seconds ?? 0);
     // Backend owns request timeout; zero means no additional browser idle cutoff.
     return idle === 0 ? 0 : Math.max(1000, idle * 1000 + 5000);
   }

@@ -590,6 +590,24 @@ class SQLRepository:
             "id=%s",
             (session["id"],),
         )
+        from ..timeline import compact_timeline
+
+        journal = await self._rows(c, "events", "run_id=%s", (run["id"],), order="seq")
+        timeline = compact_timeline(
+            [
+                {
+                    **json.loads(row["payload_json"]),
+                    "persisted_at": datetime.fromtimestamp(
+                        row["created_at"], timezone.utc
+                    ).isoformat(),
+                }
+                for row in journal
+            ],
+            run["id"],
+            status,
+        )
+        if timeline:
+            await self._message(c, session, run["id"], timeline)
         await self._events(c, run, [{"type": "terminal", "status": status}])
         if status == "completed":
             await self._insert(
@@ -685,7 +703,7 @@ class SQLRepository:
 
     async def begin_tool(self, ctx, call_id, name, arguments):
         async with self._db.connection() as c:
-            await self._fenced(c, ctx, allow_cancelled=False)
+            run, _ = await self._fenced(c, ctx, allow_cancelled=False)
             old = await self._one(
                 c,
                 "tool_calls",
@@ -714,13 +732,26 @@ class SQLRepository:
                 updated_at=now,
             )
             await self._insert(c, "tool_calls", row)
+            await self._events(
+                c,
+                run,
+                [
+                    {
+                        "type": "tool",
+                        "tool_call_id": call_id,
+                        "name": name,
+                        "arguments": arguments,
+                        "status": "preparing",
+                    }
+                ],
+            )
             return {"created": True, **exported(row)}
 
     async def end_tool(self, ctx, call_id, status, result):
-        if status not in {"completed", "denied", "unknown", "failed"}:
+        if status not in {"completed", "denied", "unknown", "failed", "cancelled"}:
             raise ValueError("Invalid tool terminal status")
         async with self._db.connection() as c:
-            await self._fenced(c, ctx)
+            run, _ = await self._fenced(c, ctx)
             old = await self._one(
                 c,
                 "tool_calls",
@@ -749,6 +780,21 @@ class SQLRepository:
                 (ctx.run_id, key(call_id)),
             )
 
+            await self._events(
+                c,
+                run,
+                [
+                    {
+                        "type": "tool",
+                        "tool_call_id": call_id,
+                        "name": old["name"],
+                        "arguments": json.loads(old["arguments_json"]),
+                        "status": status,
+                        "output": result,
+                    }
+                ],
+            )
+
     @staticmethod
     def _approval(row):
         return {
@@ -764,7 +810,7 @@ class SQLRepository:
     async def request_approval(self, ctx, call_id, timeout):
         positive(timeout, "timeout")
         async with self._db.connection() as c:
-            await self._fenced(c, ctx, allow_cancelled=False)
+            run, _ = await self._fenced(c, ctx, allow_cancelled=False)
             tool = await self._one(
                 c, "tool_calls", "run_id=%s AND call_key=%s", (ctx.run_id, key(call_id))
             )
@@ -790,6 +836,23 @@ class SQLRepository:
             await self._insert(c, "approvals", row)
             await self._update(
                 c, "runs", {"status": "waiting_approval"}, "id=%s", (ctx.run_id,)
+            )
+            details = {
+                "tool_call_id": call_id,
+                "name": tool["name"],
+                "arguments": json.loads(tool["arguments_json"]),
+            }
+            await self._events(
+                c,
+                run,
+                [
+                    {"type": "tool", **details, "status": "awaiting_approval"},
+                    {
+                        "type": "approval",
+                        **details,
+                        "approval": {**self._approval(row), **details},
+                    },
+                ],
             )
             return self._approval(row)
 
@@ -847,6 +910,17 @@ class SQLRepository:
                     {"status": row["status"], "decided_at": now},
                     "id=%s",
                     (approval_id,),
+                )
+                await self._events(
+                    c,
+                    run,
+                    [
+                        {
+                            "type": "approval",
+                            "tool_call_id": row["call_id"],
+                            "approval": self._approval(row),
+                        }
+                    ],
                 )
             return self._approval(row)
 

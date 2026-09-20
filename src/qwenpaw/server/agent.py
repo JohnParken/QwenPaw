@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import json
-import uuid
+from contextvars import ContextVar
 from types import SimpleNamespace
 
 from .tools import ToolGateway
 from .contracts import ToolOutcomeUnknown
+
+# The model's ID is shared by the envelope, gateway, approval and sandbox.
+# Scoped to an acting task, never a mutable field on a shared tool/worker.
+current_tool_call: ContextVar[str | None] = ContextVar("server_tool_call", default=None)
 
 
 class ServerAgentBuilder:
@@ -29,6 +33,23 @@ class ServerAgentBuilder:
         from ..config.config import AgentProfileConfig
 
         class ServerAgent(QwenPawAgent):
+            async def _acting(self, tool_call):
+                source = super()._acting(tool_call)
+                try:
+                    while True:
+                        # Executor resumes each __anext__ in a fresh task.
+                        # Never retain a ContextVar token across a yield.
+                        token = current_tool_call.set(tool_call.id)
+                        try:
+                            chunk = await anext(source)
+                        except StopAsyncIteration:
+                            break
+                        finally:
+                            current_tool_call.reset(token)
+                        yield chunk
+                finally:
+                    await source.aclose()
+
             def _get_tool_coordinator(self):
                 return None
 
@@ -44,10 +65,13 @@ class ServerAgentBuilder:
 
             def bind(tool):
                 async def invoke(**arguments):
+                    call_id = current_tool_call.get()
+                    if not call_id:
+                        raise RuntimeError("Missing model tool call identity")
                     try:
                         result = await gateway.invoke(
                             self.execution,
-                            str(uuid.uuid4()),
+                            call_id,
                             tool.name,
                             arguments,
                         )

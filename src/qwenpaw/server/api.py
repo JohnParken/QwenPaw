@@ -3,15 +3,23 @@
 import asyncio
 import hmac
 import json
+import logging
 import uuid
 from typing import Annotated
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse, PlainTextResponse
+from fastapi.responses import (
+    JSONResponse,
+    StreamingResponse,
+    PlainTextResponse,
+    Response,
+)
 from pydantic import BaseModel, ConfigDict, Field
 
 from .contracts import Conflict, NotFound
+
+logger = logging.getLogger(__name__)
 
 
 class SubmitRun(BaseModel):
@@ -21,6 +29,7 @@ class SubmitRun(BaseModel):
     channelid: str = Field(min_length=1, max_length=256)
     request_id: str = Field(min_length=1, max_length=256)
     message: str = Field(min_length=1, max_length=100000)
+    debug: bool = False
     attachments: list[str] = Field(default_factory=list, max_length=20)
 
 
@@ -98,6 +107,29 @@ def create_api(config, repository, objects, notifier=None) -> FastAPI:
         for file_id in body.attachments:
             await repository.file(usrid, file_id)
         definition = config.definition()
+        attachment_text = []
+        if definition.model_protocol == "tl" and body.attachments:
+            from ..attachments import AttachmentError, extract_attachment
+
+            if objects is None:
+                raise HTTPException(503, "File storage is not configured")
+            for file_id in body.attachments:
+                record = await repository.file(usrid, file_id)
+                if record["size"] > 10 * 1024 * 1024:
+                    raise HTTPException(413, "Attachment exceeds 10 MiB")
+                try:
+                    parsed = await asyncio.to_thread(
+                        extract_attachment,
+                        record["name"],
+                        await objects.get(record["key"]),
+                    )
+                except AttachmentError as exc:
+                    raise HTTPException(422, str(exc)) from exc
+                attachment_text.append(parsed)
+            if sum(len(item["text"]) for item in attachment_text) > 100000:
+                raise HTTPException(
+                    413, "Combined attachment text exceeds 100000 characters"
+                )
         payload = definition.model_dump(mode="json")
         if saved_definition != payload:
             await repository.put_definition(definition.version, payload)
@@ -107,9 +139,34 @@ def create_api(config, repository, objects, notifier=None) -> FastAPI:
             body.channelid,
             body.sessionid,
             body.request_id,
-            {"message": body.message, "attachments": body.attachments},
+            {
+                "message": body.message,
+                "attachments": body.attachments,
+                **({"debug": True} if body.debug else {}),
+                **({"attachment_text": attachment_text} if attachment_text else {}),
+            },
             definition.version,
         )
+
+    @app.get("/v1/assistant")
+    async def assistant(usrid: user):
+        definition = config.definition()
+        return {
+            "name": definition.name,
+            "version": definition.version,
+            "model": definition.model,
+            "model_protocol": definition.model_protocol,
+            "attachments": objects is not None,
+            "tools": [
+                {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "approval": tool.approval,
+                    "execution": tool.execution,
+                }
+                for tool in definition.tools
+            ],
+        }
 
     @app.get("/v1/runs/{run_id}")
     async def get_run(run_id: str, usrid: user):
@@ -136,26 +193,44 @@ def create_api(config, repository, objects, notifier=None) -> FastAPI:
 
         async def stream():
             position = cursor
-            async with feeds.subscribe(usrid, run_id) as feed:
-                while not await request.is_disconnected():
-                    batch = await feed.after(position)
-                    for event in batch:
-                        position = event["seq"]
-                        payload = dict(event["payload"])
-                        stored_at = event.get("created_at")
-                        if stored_at is not None:
-                            payload["persisted_at"] = stored_at.isoformat()
-                        yield f"id: {position}\ndata: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
-                    if batch:
-                        continue
-                    if feed.status is not None:
-                        yield f"event: end\ndata: {json.dumps({'status': feed.status})}\n\n"
-                        break
-                    async with feed.changed:
-                        try:
-                            await asyncio.wait_for(feed.changed.wait(), 1)
-                        except asyncio.TimeoutError:
-                            yield ": keepalive\n\n"
+            logger.debug("SSE open run=%s cursor=%s", run_id, position)
+            try:
+                async with feeds.subscribe(usrid, run_id) as feed:
+                    while not await request.is_disconnected():
+                        batch = await feed.after(position)
+                        logger.debug(
+                            "SSE batch run=%s cursor=%s count=%s",
+                            run_id,
+                            position,
+                            len(batch),
+                        )
+                        for event in batch:
+                            position = event["seq"]
+                            payload = dict(event["payload"])
+                            stored_at = event.get("created_at")
+                            if stored_at is not None:
+                                payload["persisted_at"] = stored_at.isoformat()
+                            yield f"id: {position}\ndata: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
+                        if batch:
+                            continue
+                        if feed.status is not None:
+                            yield f"event: end\ndata: {json.dumps({'status': feed.status})}\n\n"
+                            break
+                        async with feed.changed:
+                            try:
+                                await asyncio.wait_for(feed.changed.wait(), 1)
+                            except asyncio.TimeoutError:
+                                yield ": keepalive\n\n"
+            except asyncio.CancelledError:
+                logger.debug("SSE disconnected run=%s cursor=%s", run_id, position)
+                raise
+            except Exception:
+                logger.exception(
+                    "SSE delivery failed run=%s cursor=%s", run_id, position
+                )
+                raise
+            finally:
+                logger.debug("SSE close run=%s cursor=%s", run_id, position)
 
         return StreamingResponse(
             stream(),
@@ -184,6 +259,8 @@ def create_api(config, repository, objects, notifier=None) -> FastAPI:
 
     @app.post("/v1/files", status_code=201)
     async def upload(file: UploadFile, usrid: user):
+        if objects is None:
+            raise HTTPException(503, "File storage is not configured")
         file_id = str(uuid.uuid4())
         # Object keys contain no user-provided path components.
         key = "uploads/" + file_id
@@ -212,6 +289,17 @@ def create_api(config, repository, objects, notifier=None) -> FastAPI:
     async def file_info(file_id: str, usrid: user):
         record = await repository.file(usrid, file_id)
         return {**record, "download_url": await objects.url(record["key"])}
+
+    @app.get("/v1/files/{file_id}/content")
+    async def file_content(file_id: str, usrid: user):
+        record = await repository.file(usrid, file_id)
+        if objects is None:
+            raise HTTPException(503, "File storage is not configured")
+        return Response(
+            await objects.get(record["key"]),
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": "attachment", "Cache-Control": "no-store"},
+        )
 
     @app.delete("/v1/files/{file_id}", status_code=204)
     async def delete_file(file_id: str, usrid: user):

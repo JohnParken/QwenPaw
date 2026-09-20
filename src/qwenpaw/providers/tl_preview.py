@@ -26,7 +26,7 @@ TL_PREVIEW_CAPABILITY = "tl_preview"
 PREVIEW_START = "preview_start"
 PREVIEW_UPDATE = "preview_update"
 PREVIEW_CLEAR = "preview_clear"
-_PREVIEW_TYPES = {PREVIEW_START, PREVIEW_UPDATE, PREVIEW_CLEAR}
+_PREVIEW_TYPES = {PREVIEW_START, PREVIEW_UPDATE, PREVIEW_CLEAR, "model_log"}
 _CLEAR_REASONS = {"invalid", "correction", "cancel", "error", "commit"}
 _DEFAULT_QUEUE_SIZE = 64
 _DEFAULT_PREVIEW_LIMIT = 64 * 1024
@@ -136,8 +136,7 @@ class PreviewQueue:
     @staticmethod
     def _key(payload):
         return tuple(
-            _field(payload, key)
-            for key in ("run_id", "invocation_id", "attempt_id")
+            _field(payload, key) for key in ("run_id", "invocation_id", "attempt_id")
         )
 
     def put_preview_nowait(self, event: Any) -> bool:
@@ -145,16 +144,22 @@ class PreviewQueue:
         event_type = _event_type(payload)
         if event_type not in _PREVIEW_TYPES:
             return False
+        if event_type == "model_log":
+            # Diagnostics are expendable; reserve space for preview lifecycles.
+            if len(self._items) + len(self._active_attempts) + 2 >= self.maxsize:
+                return False
+            self._items.append(event)
+            self._ready.set()
+            return True
         key = self._key(payload)
         entries = [(item, self._decode(item)) for item in self._items]
         if event_type == PREVIEW_START:
             lifecycle_count = sum(
-                _event_type(old) != PREVIEW_UPDATE for _, old in entries
+                _event_type(old) in {PREVIEW_START, PREVIEW_CLEAR} for _, old in entries
             )
             if (
                 key in self._active_attempts
-                or lifecycle_count + len(self._active_attempts) + 2
-                > self.maxsize
+                or lifecycle_count + len(self._active_attempts) + 2 > self.maxsize
             ):
                 return False
         elif key not in self._active_attempts:
@@ -169,8 +174,7 @@ class PreviewQueue:
                 and self._key(old) == key
                 and (
                     event_type != PREVIEW_UPDATE
-                    or _field(old, "item_index")
-                    == _field(payload, "item_index")
+                    or _field(old, "item_index") == _field(payload, "item_index")
                 )
             )
         ]
@@ -182,7 +186,7 @@ class PreviewQueue:
             update_index = next(
                 index
                 for index, (_, old) in enumerate(entries)
-                if _event_type(old) == PREVIEW_UPDATE
+                if _event_type(old) in {PREVIEW_UPDATE, "model_log"}
             )
             entries.pop(update_index)
         if event_type == PREVIEW_START:
@@ -237,6 +241,9 @@ class PreviewScope:
     sink: Any = None
     max_preview_chars: int = _DEFAULT_PREVIEW_LIMIT
     enabled: bool = True
+    model_debug: bool = False
+    diagnostic_count: int = 0
+    diagnostic_samples: dict[str, int] = field(default_factory=dict)
     attempts: dict[str, "PreviewAttempt"] = field(default_factory=dict)
     closed: bool = False
 
@@ -317,6 +324,7 @@ def preview_scope(
     sink: Any = None,
     max_preview_chars: int = _DEFAULT_PREVIEW_LIMIT,
     enabled: bool = True,
+    model_debug: bool = False,
 ) -> Iterator[PreviewScope]:
     """Bind a preview queue to the current request context.
 
@@ -330,6 +338,7 @@ def preview_scope(
         sink=sink,
         max_preview_chars=max_preview_chars,
         enabled=enabled,
+        model_debug=model_debug,
     )
     token = _CURRENT_PREVIEW_SCOPE.set(scope)
     try:
@@ -397,10 +406,7 @@ class _StringState:
         if self.pending_high is not None:
             if 0xDC00 <= codepoint <= 0xDFFF:
                 text = chr(
-                    0x10000
-                    + ((self.pending_high - 0xD800) << 10)
-                    + codepoint
-                    - 0xDC00,
+                    0x10000 + ((self.pending_high - 0xD800) << 10) + codepoint - 0xDC00,
                 )
                 self.pending_high = None
                 self.awaiting_low = False
@@ -799,9 +805,7 @@ class PreviewAttempt:
     ) -> None:
         self.scope = scope
         self.run_id = run_id or (scope.run_id if scope else "")
-        self.invocation_id = invocation_id or (
-            scope.invocation_id if scope else ""
-        )
+        self.invocation_id = invocation_id or (scope.invocation_id if scope else "")
         self.attempt_id = attempt_id or "attempt_" + uuid.uuid4().hex
         self.max_preview_chars = max_preview_chars or (
             scope.max_preview_chars if scope else _DEFAULT_PREVIEW_LIMIT
@@ -832,9 +836,7 @@ class PreviewAttempt:
             return None
         return event if self.scope.publish(event) else None
 
-    def _update(
-        self, kind: str, item_index: int, text: str
-    ) -> PreviewEvent | None:
+    def _update(self, kind: str, item_index: int, text: str) -> PreviewEvent | None:
         if self.closed:
             return None
         if len(text) > self.max_preview_chars:
@@ -962,9 +964,7 @@ def preview_event_payload(value: Any) -> dict[str, Any]:
     if callable(dump):
         payload = dump(mode="json")
         return (
-            dict(payload)
-            if isinstance(payload, dict)
-            else {"type": _event_type(value)}
+            dict(payload) if isinstance(payload, dict) else {"type": _event_type(value)}
         )
     return {"type": _event_type(value)}
 

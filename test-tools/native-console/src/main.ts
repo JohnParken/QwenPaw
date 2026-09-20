@@ -8,12 +8,32 @@ import {
   escapeHtml,
 } from "./markdown";
 import { renderToolCard } from "./tools-render";
+import { isModelLogEvent, ModelLogStore, type ModelLogMode } from "./model-log";
+import {
+  isRunTimeline,
+  messagePayload,
+  ServiceClient,
+  type ServiceMessageRow,
+  type ServiceSession,
+} from "./service";
 import { ContextMonitor } from "./context-monitor";
 import { InboxPanel } from "./inbox";
 import { CheckpointsPanel } from "./checkpoints";
 import { SkillsPanel } from "./skills";
 
 const api = new ApiClient();
+const modelLogs = new ModelLogStore();
+declare const __QWENPAW_SERVICE_USER__: string;
+declare const __QWENPAW_CHAT_MODE__: string;
+declare const __QWENPAW_MODEL_DEBUG_DEFAULT__: boolean;
+const serviceUser =
+  typeof __QWENPAW_SERVICE_USER__ === "string"
+    ? __QWENPAW_SERVICE_USER__
+    : "default";
+const service = new ServiceClient(api, {
+  user: serviceUser,
+  channel: "native-console",
+});
 const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 const input = (id: string) => $<HTMLInputElement>(id).value.trim();
@@ -93,9 +113,10 @@ $("app").innerHTML = `
     <!-- Top Header -->
     <header class="app-header">
       <div class="header-left">
-        <span id="chat-identity" class="current-chat-name">未选择会话</span>
-        <span id="chat-provider" class="header-tag accent">TL: deepseek-v4-flash</span>
-        <span id="active-agent-badge" class="header-tag">Agent: default</span>
+          <span id="chat-identity" class="current-chat-name">未选择会话</span>
+          <span id="chat-provider" class="header-tag accent">TL: deepseek-v4-flash</span>
+          <span id="active-agent-badge" class="header-tag">Agent: default</span>
+          <span id="chat-mode-badge" class="header-tag service-mode-badge">本地 Console</span>
       </div>
       <div class="header-right">
         <!-- Context Monitor -->
@@ -112,9 +133,17 @@ $("app").innerHTML = `
         </div>
         <span id="stream-status" class="header-tag">流式状态：空闲</span>
         <button id="stop" disabled class="btn-stop">停止生成</button>
+        <label class="debug-toggle" title="为下一次模型请求启用后端诊断，同时打开前端传输调试日志">
+          <input id="debug-toggle" data-testid="model-debug" type="checkbox">
+          Debug
+        </label>
         <button id="toggle-logs-btn" class="header-btn" type="button">
           <span>📋 协议日志</span>
           <span id="log-count" class="badge-count">0</span>
+        </button>
+        <button id="toggle-model-logs-btn" class="header-btn" type="button">
+          <span>🧠 模型诊断</span>
+          <span id="model-log-count" class="badge-count">0</span>
         </button>
       </div>
     </header>
@@ -128,6 +157,13 @@ $("app").innerHTML = `
           <p id="connection-status" style="margin:0; font-size:12px; color:var(--app-text-tertiary);">开发代理默认连接 http://127.0.0.1:8088；真实请求仅由操作触发。</p>
         </div>
         <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+          <label style="display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:600;">聊天模式
+            <select id="chat-mode" style="padding:4px 8px; font-size:12px;">
+              <option value="local" selected>本地 Console 管理</option>
+              <option value="service">服务聊天 /v1</option>
+            </select>
+          </label>
+          <span id="service-identity" class="muted" style="font-size:12px;">服务用户由开发服务器固定注入</span>
           <form id="connect-form" class="row" style="display:inline-flex; gap:8px; align-items:center;">
             <label style="display:inline-flex; align-items:center; gap:4px; font-size:12px;">访问令牌<input id="token" type="password" autocomplete="off" placeholder="未启用鉴权可留空" style="padding:4px 8px; font-size:12px; width:180px;"></label>
             <button class="primary" style="padding:4px 12px; font-size:12px;">连接 / 检查</button>
@@ -270,6 +306,13 @@ $("app").innerHTML = `
               <button class="primary">保存 Provider 配置</button>
             </form>
           </div>
+          <div id="service-tl-panel" class="subcard" hidden>
+            <h3>平台 TL Provider · 多用户服务</h3>
+            <p id="service-tl-model">连接服务后读取平台模型与配置版本。</p>
+            <p>服务聊天使用平台 AssistantDefinition 中的 model_protocol、base_url 和 tl_config。修改平台配置时请更新 version，新任务使用新版本，已有任务继续使用原配置。</p>
+            <p>本地入口：npm run service:tl。配置文件：deploy/server/assistant.tl.local.json；生产使用 assistant.tl.json。TL 鉴权密钥由 QWENPAW_SERVER_MODEL_API_KEY 提供。</p>
+            <p>TL 实际上游模型由代理配置决定；个人 Agent 的“用于当前 Agent”设置不影响这里。</p>
+          </div>
           <div id="tl-panel"></div>
           <form id="channel-form" class="subcard">
             <h3>渠道配置</h3>
@@ -311,6 +354,21 @@ $("app").innerHTML = `
         </div>
         <div id="log-list" class="logs-drawer-list"></div>
       </aside>
+      <aside id="model-logs-drawer" class="model-logs-drawer closed" aria-label="模型诊断日志">
+        <div class="logs-drawer-header">
+          <h2>🧠 模型诊断</h2>
+          <div style="display:flex; gap:6px;">
+            <button id="export-model-logs" class="secondary" style="padding:3px 8px; font-size:11px;">导出</button>
+            <button id="clear-model-logs" class="secondary" style="padding:3px 8px; font-size:11px;">清空</button>
+            <button id="close-model-logs-btn" class="secondary" style="padding:3px 8px; font-size:11px;">✕</button>
+          </div>
+        </div>
+        <div class="logs-drawer-search">
+          <input id="model-log-filter" placeholder="筛选 request、response、tool 或 error">
+        </div>
+        <p id="model-log-empty" class="model-log-empty">暂无模型诊断事件。开启 Debug 后发送一条消息；后端还需 QWENPAW_MODEL_DEBUG=1。</p>
+        <div id="model-log-list" class="logs-drawer-list"></div>
+      </aside>
     </div>
   </div>
 `;
@@ -318,7 +376,9 @@ $("app").innerHTML = `
 let busy = false;
 let streamController: AbortController | null = null;
 let chats: RecordValue[] = [];
+let serviceSessions: ServiceSession[] = [];
 let currentChat: RecordValue | undefined;
+let currentServiceSession: ServiceSession | undefined;
 let loadedFile: {
   path: string;
   root: string;
@@ -334,19 +394,110 @@ let activeBubbleEl: HTMLElement | null = null;
 let activeOutputPre: HTMLElement | null = null;
 let activeStream: ChatStream | null = null;
 let approvalPollTimer: any = null;
+let activeServiceRunId = "";
+let serviceCancelRequested = false;
+let modelLogFrame = 0;
+
+type ChatMode = "local" | "service";
+const chatMode = (): ChatMode =>
+  $<HTMLSelectElement>("chat-mode").value === "service" ? "service" : "local";
+const serviceSessionId = (session: ServiceSession): string =>
+  String(session.id || session.external_id || "");
+const serviceSubmitSessionId = (session: ServiceSession): string =>
+  String(session.external_id || session.id || "");
 
 const notice = (message: string, error = false) => {
   $("notice").textContent = String(api.safe(message));
   $("notice").classList.toggle("error", error);
 };
 
+const modelDebugEnabled = () =>
+  $<HTMLInputElement>("debug-toggle").checked === true;
+
+const modelDebugDefault =
+  typeof __QWENPAW_MODEL_DEBUG_DEFAULT__ !== "undefined" &&
+  __QWENPAW_MODEL_DEBUG_DEFAULT__ === true;
+
+function captureModelLog(
+  value: unknown,
+  mode: ModelLogMode,
+  eventName = "",
+): boolean {
+  let candidate = value;
+  if (!isModelLogEvent(candidate) && eventName === "model_log") {
+    candidate = {
+      type: "model_log",
+      object: "diagnostic",
+      event: eventName,
+      level: "info",
+      payload: value,
+    };
+  }
+  if (!isModelLogEvent(candidate)) return false;
+  const added = modelLogs.add(candidate, mode, (payload) => api.safe(payload));
+  if (added) scheduleModelLogRender();
+  // Recognized diagnostic replays must never enter the chat renderer.
+  return true;
+}
+
+function scheduleModelLogRender(): void {
+  if (modelLogFrame) return;
+  modelLogFrame = requestAnimationFrame(() => {
+    modelLogFrame = 0;
+    renderModelLogs();
+  });
+}
+
+function renderModelLogs(): void {
+  const list = $("model-log-list");
+  const filter = input("model-log-filter");
+  const opened = new Set(
+    [...list.querySelectorAll<HTMLDetailsElement>("details[open]")].map(
+      (element) => element.dataset.id || "",
+    ),
+  );
+  list.replaceChildren();
+  $("model-log-count").textContent = String(modelLogs.size);
+  const visible = modelLogs.entries.filter((entry) =>
+    modelLogs.matches(entry, filter),
+  );
+  $("model-log-empty").textContent = modelLogs.size
+    ? visible.length
+      ? "模型诊断来自后端 model_log 事件；敏感字段已脱敏。"
+      : "当前筛选没有匹配的模型诊断事件。"
+    : modelDebugEnabled()
+      ? "暂无模型诊断事件。后端可能未启用 QWENPAW_MODEL_DEBUG=1，或本轮尚未产生诊断。"
+      : "暂无模型诊断事件。开启 Debug 后发送一条消息；后端还需 QWENPAW_MODEL_DEBUG=1。";
+  for (const entry of visible) {
+    const details = node("details");
+    details.dataset.id = entry.id;
+    details.open = opened.has(entry.id);
+    const summary = node(
+      "summary",
+      `${entry.mode} · ${entry.event} · ${entry.level}${entry.truncated ? " · 已截断" : ""}`,
+    );
+    const pre = node("pre");
+    pre.textContent = JSON.stringify(entry, null, 2) || String(entry);
+    details.append(summary, pre);
+    list.append(details);
+  }
+}
+
+function clearModelLogs(): void {
+  modelLogs.clear();
+  renderModelLogs();
+}
+
 async function run(
   task: () => Promise<void>,
   success = "操作完成",
+  lockWorkFields = true,
 ): Promise<void> {
   if (busy) return;
   busy = true;
-  $<HTMLFieldSetElement>("work-fields").disabled = true;
+  for (const id of ["chat-mode", "chats", "agent"])
+    $<HTMLSelectElement>(id).disabled = true;
+  if (lockWorkFields) $<HTMLFieldSetElement>("work-fields").disabled = true;
   $<HTMLFieldSetElement>("connection-fields").disabled = true;
   notice("请求处理中…");
   try {
@@ -356,7 +507,10 @@ async function run(
     notice(error instanceof Error ? error.message : String(error), true);
   } finally {
     busy = false;
-    $<HTMLFieldSetElement>("work-fields").disabled = false;
+    for (const id of ["chat-mode", "chats"])
+      $<HTMLSelectElement>(id).disabled = false;
+    $<HTMLSelectElement>("agent").disabled = chatMode() === "service";
+    if (lockWorkFields) $<HTMLFieldSetElement>("work-fields").disabled = false;
     $<HTMLFieldSetElement>("connection-fields").disabled = false;
   }
 }
@@ -367,7 +521,9 @@ function action(id: string, task: () => Promise<void>, success?: string): void {
     element.tagName === "FORM" ? "submit" : "click",
     (event) => {
       event.preventDefault();
-      void run(task, success);
+      // Service approvals live inside the chat fieldset. Keep that fieldset
+      // interactive while a service run waits for a decision.
+      void run(task, success, id !== "send-form" || chatMode() !== "service");
     },
   );
 }
@@ -397,17 +553,40 @@ const skillsPanel = new SkillsPanel(api, run, "skills-mount");
 function renderSidebarSessions(): void {
   const container = $("sidebar-sessions-list");
   container.replaceChildren();
-  for (const chat of chats) {
+  const sessions =
+    chatMode() === "service"
+      ? serviceSessions.map((session) => ({
+          id: serviceSessionId(session),
+          title: String(session.external_id || session.id || "服务会话").slice(
+            0,
+            40,
+          ),
+          service: session,
+        }))
+      : chats.map((chat) => ({
+          id: String(chat.id),
+          title: String(chat.name || `会话 ${String(chat.id).slice(0, 8)}`),
+          service: undefined,
+        }));
+  for (const session of sessions) {
     const item = node("button");
     item.type = "button";
     item.className =
-      "sidebar-session-item" + (currentChat?.id === chat.id ? " active" : "");
-    item.dataset.id = chat.id;
-    const title = node("span", chat.name || `会话 ${chat.id.slice(0, 8)}`);
+      "sidebar-session-item" +
+      ((
+        chatMode() === "service"
+          ? currentServiceSession?.id === session.id
+          : currentChat?.id === session.id
+      )
+        ? " active"
+        : "");
+    item.dataset.id = session.id;
+    const title = node("span", session.title);
     title.className = "session-name-truncate";
     item.append(title);
     item.addEventListener("click", () => {
-      $<HTMLSelectElement>("chats").value = chat.id;
+      if (busy) return;
+      $<HTMLSelectElement>("chats").value = session.id;
       updateChatSelection();
     });
     container.append(item);
@@ -415,10 +594,16 @@ function renderSidebarSessions(): void {
 }
 
 function resetContext(): void {
+  streamController?.abort();
+  activeServiceRunId = "";
+  serviceCancelRequested = false;
+  clearModelLogs();
   tl.reset();
   contextMonitor.update(null, null);
   chats = [];
+  serviceSessions = [];
   currentChat = undefined;
+  currentServiceSession = undefined;
   loadedFile = null;
   loadedChannel = "";
   nextCursor = "";
@@ -435,7 +620,73 @@ function resetContext(): void {
   selectOptions("chats", [{ value: "", label: "选择会话" }]);
 }
 
+function setChatModeUi(mode: ChatMode): void {
+  const serviceMode = mode === "service";
+  document.body.dataset.chatMode = mode;
+  $("service-tl-panel").hidden = !serviceMode;
+  $("tl-panel").hidden = serviceMode;
+  $("service-tl-model").textContent = "连接服务后读取平台模型与配置版本。";
+  $<HTMLInputElement>("chat-file").disabled = serviceMode;
+  $<HTMLInputElement>("chat-file").value = "";
+  $("chat-file-badge").textContent = "";
+  $<HTMLSelectElement>("agent").disabled = serviceMode;
+  $<HTMLSelectElement>("approval-level").disabled = serviceMode;
+  $("approval-level").title = serviceMode
+    ? "审批策略由服务端平台配置决定"
+    : "本地工具审批策略";
+  if (serviceMode) $("chat-provider").textContent = "服务模型：连接后获取";
+  $("chat-mode-badge").textContent = serviceMode
+    ? "服务聊天 /v1"
+    : "本地 Console";
+  $("service-identity").textContent = serviceMode
+    ? `开发用户: ${serviceUser} · token 仅由 Vite 代理注入`
+    : "管理请求使用当前页面的本地凭据";
+  $("connection-status").textContent = serviceMode
+    ? "服务模式使用 /api/service → /v1；管理页仍连接本地 /api。"
+    : "开发代理默认连接 http://127.0.0.1:8088；真实请求仅由操作触发。";
+  $<HTMLInputElement>("token").disabled = serviceMode;
+  $<HTMLInputElement>("username").disabled = serviceMode;
+  $<HTMLInputElement>("password").disabled = serviceMode;
+  $<HTMLButtonElement>("logout").disabled = serviceMode;
+  $("agent-type-pill").textContent = serviceMode ? "Service" : "Active";
+}
+
+async function connectService(): Promise<void> {
+  resetContext();
+  let health: Record<string, unknown>;
+  try {
+    health = await service.health();
+  } catch (error) {
+    throw new Error(
+      `多用户服务连接失败。请运行 npm run service:tl，并确认 QWENPAW_SERVICE_TARGET 指向 8092 的 /v1 服务；8090 可能是 office 服务。原始错误：${String(error)}`,
+    );
+  }
+  if (health.mode !== undefined && health.mode !== "server")
+    throw new Error("代理目标不是 QwenPaw 多用户服务");
+  try {
+    const assistant = await service.assistant();
+    $<HTMLInputElement>("chat-file").disabled = assistant.attachments !== true;
+    $("chat-file-badge").textContent =
+      assistant.attachments === true ? "" : "当前服务未启用附件存储";
+    $("service-tl-model").textContent =
+      `平台模型：${String(assistant.model || "未知")} · 协议：${String(assistant.model_protocol || "未知")} · 配置版本：${String(assistant.version || "未知")}`;
+    const model = assistant.model || assistant.name;
+    if (model) $("chat-provider").textContent = `服务: ${String(model)}`;
+  } catch {
+    // Older service deployments may not expose the optional metadata route.
+  }
+  await refreshServiceSessions();
+  $("connection-status").textContent =
+    `服务已连接 · ${String(health.status || "ok")} · 用户 ${serviceUser}`;
+  $("conn-text").textContent = `服务已连接 · ${serviceUser}`;
+  $("conn-dot").className = "status-dot connected";
+}
+
 async function connect(): Promise<void> {
+  if (chatMode() === "service") {
+    await connectService();
+    return;
+  }
   api.token = value("token");
   resetContext();
   const status = await api.request<RecordValue>("/api/auth/status");
@@ -464,6 +715,24 @@ async function connect(): Promise<void> {
 }
 
 action("connect-form", connect, "连接成功");
+
+if (
+  typeof __QWENPAW_CHAT_MODE__ !== "undefined" &&
+  __QWENPAW_CHAT_MODE__ === "service"
+)
+  $<HTMLSelectElement>("chat-mode").value = "service";
+$<HTMLInputElement>("debug-toggle").checked = modelDebugDefault;
+api.setVerboseLogging(modelDebugEnabled());
+setChatModeUi(chatMode());
+$<HTMLSelectElement>("chat-mode").addEventListener("change", () => {
+  resetContext();
+  setChatModeUi(chatMode());
+  notice(
+    chatMode() === "service"
+      ? "已切换服务聊天模式，请连接服务"
+      : "已切换本地 Console 模式，请连接本地后端",
+  );
+});
 
 action(
   "login-form",
@@ -520,10 +789,27 @@ $("toggle-connect-panel").addEventListener("click", () => {
 
 // Logs Drawer
 $("toggle-logs-btn").addEventListener("click", () => {
-  $("logs-drawer").classList.toggle("closed");
+  const drawer = $("logs-drawer");
+  drawer.classList.toggle("closed");
+  if (!drawer.classList.contains("closed"))
+    $("model-logs-drawer").classList.add("closed");
 });
 $("close-logs-btn").addEventListener("click", () => {
   $("logs-drawer").classList.add("closed");
+});
+$("toggle-model-logs-btn").addEventListener("click", () => {
+  const drawer = $("model-logs-drawer");
+  drawer.classList.toggle("closed");
+  if (!drawer.classList.contains("closed"))
+    $("logs-drawer").classList.add("closed");
+  renderModelLogs();
+});
+$("close-model-logs-btn").addEventListener("click", () => {
+  $("model-logs-drawer").classList.add("closed");
+});
+$("debug-toggle").addEventListener("change", () => {
+  api.setVerboseLogging(modelDebugEnabled());
+  renderModelLogs();
 });
 
 // Preset Chips
@@ -592,6 +878,14 @@ async function resolveApproval(
   requestId: string,
   scope: "exact" | "similar",
 ): Promise<void> {
+  if (chatMode() === "service") {
+    await service.decide(requestId, true);
+    notice(`已批准服务工具执行 (${scope})`);
+    if (activeStream) activeStream.pendingApproval = null;
+    if (activeBubbleEl && activeOutputPre && activeStream)
+      updateAssistantBubble(activeBubbleEl, activeStream, activeOutputPre);
+    return;
+  }
   if (!currentChat) return;
   await api.request("/api/approval/approve", {
     method: "POST",
@@ -609,6 +903,14 @@ async function resolveApproval(
 }
 
 async function denyApproval(requestId: string): Promise<void> {
+  if (chatMode() === "service") {
+    await service.decide(requestId, false);
+    notice("已拒绝服务工具执行");
+    if (activeStream) activeStream.pendingApproval = null;
+    if (activeBubbleEl && activeOutputPre && activeStream)
+      updateAssistantBubble(activeBubbleEl, activeStream, activeOutputPre);
+    return;
+  }
   if (!currentChat) return;
   await api.request("/api/approval/deny", {
     method: "POST",
@@ -625,13 +927,123 @@ async function denyApproval(requestId: string): Promise<void> {
   }
 }
 
+function renderOrderedTimeline(
+  cardBody: HTMLElement,
+  outputPre: HTMLElement,
+  stream: ChatStream,
+): void {
+  let timeline = cardBody.querySelector<HTMLElement>(".ordered-timeline");
+  if (!timeline) {
+    timeline = node("div");
+    timeline.className = "ordered-timeline";
+    cardBody.insertBefore(timeline, outputPre);
+  }
+  const existing = new Map(
+    [...timeline.children]
+      .map(
+        (child) =>
+          [
+            (child as HTMLElement).dataset.timelineKey || "",
+            child as HTMLElement,
+          ] as const,
+      )
+      .filter(([key]) => key),
+  );
+  const next: HTMLElement[] = [];
+  for (const item of stream.timeline) {
+    let element = existing.get(item.key);
+    if (item.kind === "tool") {
+      element = renderToolCard(item.tool, element);
+      element
+        .querySelectorAll<HTMLButtonElement>("button[data-file-id]")
+        .forEach((button) => {
+          button.addEventListener("click", () => {
+            button.disabled = true;
+            void service
+              .file(button.dataset.fileId!)
+              .then(async (file) => {
+                let url = String(file.download_url || "");
+                if (!url) {
+                  url = URL.createObjectURL(
+                    await service.download(button.dataset.fileId!),
+                  );
+                  setTimeout(() => URL.revokeObjectURL(url), 300000);
+                } else if (!/^https?:\/\//i.test(url))
+                  throw new Error("无有效下载地址");
+                const link = node("a", "打开下载链接");
+                link.href = url;
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+                button.replaceWith(link);
+              })
+              .catch((error) => {
+                button.disabled = false;
+                notice(String(error), true);
+              });
+          });
+        });
+    } else if (item.kind === "text") {
+      if (!element) element = node("div");
+      element.className = "timeline-text";
+      element.dataset.timelineKey = item.key;
+      element.innerHTML = renderMarkdownToHtml(item.text);
+      bindMarkdownEvents(element);
+    } else {
+      if (!element) element = node("div");
+      element.className = `preview-card ${item.status}`;
+      element.dataset.timelineKey = item.key;
+      element.innerHTML = `
+        <div class="preview-card-header">
+          <span>预览 ${escapeHtml(item.previewKind || "draft")}</span>
+          <span>${item.status === "active" ? "流式" : `已清除 · ${escapeHtml(item.reason || "完成")}`}</span>
+        </div>
+        <pre>${escapeHtml(item.text || "等待预览…")}</pre>
+      `;
+    }
+    if (element) {
+      element.dataset.timelineKey = item.key;
+      next.push(element);
+    }
+  }
+  timeline.replaceChildren(...next);
+  outputPre.hidden = stream.timeline.length > 0;
+  outputPre.classList.toggle("sr-only", stream.timeline.length > 0);
+}
+
+const renderFrames = new WeakMap<HTMLElement, number>();
 function updateAssistantBubble(
+  article: HTMLElement,
+  stream: ChatStream,
+  outputPre: HTMLElement,
+): void {
+  const pending = renderFrames.get(article);
+  if (stream.complete) {
+    if (pending !== undefined) cancelAnimationFrame(pending);
+    renderFrames.delete(article);
+    renderAssistantBubble(article, stream, outputPre);
+    return;
+  }
+  if (pending !== undefined) return;
+  renderFrames.set(
+    article,
+    requestAnimationFrame(() => {
+      renderFrames.delete(article);
+      if (article.isConnected)
+        renderAssistantBubble(article, stream, outputPre);
+    }),
+  );
+}
+
+function renderAssistantBubble(
   article: HTMLElement,
   stream: ChatStream,
   outputPre: HTMLElement,
 ): void {
   const cardBody = article.querySelector<HTMLElement>(".msg-card-body");
   if (!cardBody) return;
+  const viewport = $("messages");
+  const follow =
+    viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 100;
 
   // 1. Thinking block
   let thinkingEl = article.querySelector<HTMLElement>(".thinking-box");
@@ -685,18 +1097,57 @@ function updateAssistantBubble(
         .join(" ");
   }
 
+  if (stream.orderedTimeline) {
+    renderOrderedTimeline(cardBody, outputPre, stream);
+  } else {
+    let previews = cardBody.querySelector<HTMLElement>(
+      ".local-preview-timeline",
+    );
+    const items = stream.timeline.filter((item) => item.kind === "preview");
+    if (!items.length) previews?.remove();
+    else {
+      if (!previews) {
+        previews = node("div");
+        previews.className = "local-preview-timeline";
+        cardBody.insertBefore(previews, outputPre);
+      }
+      previews.replaceChildren(
+        ...items.map((item) => {
+          const card = node("div");
+          card.className = "preview-card active";
+          card.append(
+            node("div", "正在生成 · 临时预览"),
+            node("pre", item.text || "等待正文…"),
+          );
+          return card;
+        }),
+      );
+    }
+  }
+
   // 2. Tools Container
   let toolsContainer = article.querySelector<HTMLElement>(
     ".tool-cards-container",
   );
-  if (stream.tools.length > 0) {
+  if (!stream.orderedTimeline && stream.tools.length > 0) {
     if (!toolsContainer) {
       toolsContainer = node("div");
       toolsContainer.className = "tool-cards-container";
       cardBody.insertBefore(toolsContainer, outputPre);
     }
+    const existing = new Map(
+      [...toolsContainer.children].map(
+        (child) =>
+          [
+            (child as HTMLElement).dataset.toolId || "",
+            child as HTMLElement,
+          ] as const,
+      ),
+    );
     toolsContainer.replaceChildren(
-      ...stream.tools.map((tool) => renderToolCard(tool)),
+      ...stream.tools.map((tool) =>
+        renderToolCard(tool, existing.get(tool.id)),
+      ),
     );
   }
 
@@ -709,6 +1160,7 @@ function updateAssistantBubble(
       cardBody.insertBefore(approvalContainer, outputPre);
     }
     const req = stream.pendingApproval;
+    const serviceApproval = chatMode() === "service";
     approvalContainer.innerHTML = `
       <div class="approval-header">🛡️ 工具安全执行审批请求 (Tool Guard)</div>
       <div class="approval-desc">
@@ -716,25 +1168,31 @@ function updateAssistantBubble(
         ${req.reason ? `<br><small style="color:#d46b08;">原因: ${escapeHtml(req.reason)}</small>` : ""}
       </div>
       <div class="approval-actions">
-        <button type="button" class="btn-approve">批准单次执行 (Exact)</button>
-        <button type="button" class="btn-approve-similar">批准同类执行 (Similar)</button>
+        <button type="button" class="btn-approve">${serviceApproval ? "批准服务工具执行" : "批准单次执行 (Exact)"}</button>
+        ${serviceApproval ? "" : '<button type="button" class="btn-approve-similar">批准同类执行 (Similar)</button>'}
         <button type="button" class="btn-deny">拒绝 (Deny)</button>
       </div>
     `;
     approvalContainer
       .querySelector(".btn-approve")!
       .addEventListener("click", () => {
-        void resolveApproval(req.requestId, "exact");
+        void resolveApproval(req.requestId, "exact").catch((error) =>
+          notice(String(error), true),
+        );
       });
     approvalContainer
-      .querySelector(".btn-approve-similar")!
-      .addEventListener("click", () => {
-        void resolveApproval(req.requestId, "similar");
+      .querySelector(".btn-approve-similar")
+      ?.addEventListener("click", () => {
+        void resolveApproval(req.requestId, "similar").catch((error) =>
+          notice(String(error), true),
+        );
       });
     approvalContainer
       .querySelector(".btn-deny")!
       .addEventListener("click", () => {
-        void denyApproval(req.requestId);
+        void denyApproval(req.requestId).catch((error) =>
+          notice(String(error), true),
+        );
       });
   } else if (approvalContainer) {
     approvalContainer.remove();
@@ -749,6 +1207,7 @@ function updateAssistantBubble(
   const effectiveText = stream.text || existingPreText;
   let mdBody = article.querySelector<HTMLElement>(".msg-markdown-body");
   if (
+    !stream.orderedTimeline &&
     effectiveText &&
     effectiveText !== "思考中…" &&
     effectiveText !== "收到事件，等待正文…"
@@ -763,7 +1222,13 @@ function updateAssistantBubble(
     outputPre.classList.add("sr-only");
   } else {
     if (mdBody) mdBody.remove();
-    outputPre.classList.remove("sr-only");
+    if (stream.orderedTimeline) {
+      outputPre.hidden = stream.timeline.length > 0;
+      outputPre.classList.toggle("sr-only", stream.timeline.length > 0);
+    } else {
+      outputPre.hidden = false;
+      outputPre.classList.remove("sr-only");
+    }
   }
 
   // 5. Turn usage stats
@@ -781,6 +1246,7 @@ function updateAssistantBubble(
 
   // 6. Context Monitor
   contextMonitor.update(stream.turnUsage, stream.contextUsage);
+  if (follow) viewport.scrollTop = viewport.scrollHeight;
 }
 
 async function checkPendingApprovals(): Promise<void> {
@@ -810,7 +1276,22 @@ async function checkPendingApprovals(): Promise<void> {
 }
 
 function updateChatSelection(): void {
+  clearModelLogs();
+  if (chatMode() === "service") {
+    currentServiceSession = serviceSessions.find(
+      (session) => serviceSessionId(session) === input("chats"),
+    );
+    currentChat = undefined;
+    $("chat-identity").textContent = currentServiceSession
+      ? `服务会话 ${String(currentServiceSession.external_id || currentServiceSession.id).slice(0, 16)}`
+      : "未选择服务会话";
+    $("messages").replaceChildren();
+    loadedFile = null;
+    renderSidebarSessions();
+    return;
+  }
   currentChat = chats.find((chat) => chat.id === input("chats"));
+  currentServiceSession = undefined;
   $("chat-identity").textContent = currentChat
     ? `${currentChat.name || "会话 " + currentChat.id.slice(0, 8)} · session ${currentChat.session_id}`
     : "未选择会话";
@@ -821,6 +1302,10 @@ function updateChatSelection(): void {
 }
 
 async function refreshChats(selected = currentChat?.id): Promise<void> {
+  if (chatMode() === "service") {
+    await refreshServiceSessions(selected);
+    return;
+  }
   chats = await api.request<RecordValue[]>("/api/chats?channel=console");
   selectOptions(
     "chats",
@@ -833,10 +1318,70 @@ async function refreshChats(selected = currentChat?.id): Promise<void> {
   updateChatSelection();
 }
 
+async function refreshServiceSessions(
+  selected = currentServiceSession?.id,
+  preserveCurrent = false,
+): Promise<void> {
+  const previousSessionId = currentServiceSession
+    ? serviceSessionId(currentServiceSession)
+    : "";
+  serviceSessions = (await service.sessions()).filter(
+    (session) =>
+      !session.channel_id || String(session.channel_id) === service.channel,
+  );
+  const selectedSession = serviceSessions.find(
+    (session) =>
+      serviceSessionId(session) === selected ||
+      session.external_id === selected,
+  );
+  selectOptions(
+    "chats",
+    [
+      { value: "", label: "选择服务会话" },
+      ...serviceSessions.map((session) => ({
+        value: serviceSessionId(session),
+        label: String(session.external_id || session.id),
+      })),
+    ],
+    selectedSession ? serviceSessionId(selectedSession) : selected,
+  );
+  if (
+    preserveCurrent &&
+    selectedSession &&
+    previousSessionId === serviceSessionId(selectedSession)
+  ) {
+    currentServiceSession = selectedSession;
+    $("chat-identity").textContent =
+      `服务会话 ${String(selectedSession.external_id || selectedSession.id).slice(0, 16)}`;
+    renderSidebarSessions();
+    return;
+  }
+  updateChatSelection();
+}
+
 action("refresh-chats", () => refreshChats());
 $("chats").addEventListener("change", updateChatSelection);
 
 async function createChat(): Promise<void> {
+  if (chatMode() === "service") {
+    const session: ServiceSession = {
+      id: crypto.randomUUID(),
+      external_id: crypto.randomUUID(),
+      channel_id: service.channel,
+      state: "idle",
+    };
+    serviceSessions.unshift(session);
+    selectOptions(
+      "chats",
+      serviceSessions.map((item) => ({
+        value: serviceSessionId(item),
+        label: String(item.external_id || item.id),
+      })),
+      serviceSessionId(session),
+    );
+    updateChatSelection();
+    return;
+  }
   const chat = await api.request<RecordValue>("/api/chats", {
     method: "POST",
     body: {
@@ -857,13 +1402,278 @@ async function createChat(): Promise<void> {
 
 action("new-chat", createChat, "会话已创建");
 
+function renderServiceHistory(rows: ServiceMessageRow[]): void {
+  const timelineRuns = new Set(
+    rows
+      .filter((row) => isRunTimeline(messagePayload(row)))
+      .map((row) => String(row.run_id || messagePayload(row).run_id || ""))
+      .filter(Boolean),
+  );
+  const renderedRuns = new Set<string>();
+  $("messages").replaceChildren();
+  for (const row of rows) {
+    const payload = messagePayload(row);
+    const runId = String(row.run_id || payload.run_id || "");
+    if (captureModelLog(payload, "service")) continue;
+    if (isRunTimeline(payload)) {
+      if (!runId || renderedRuns.has(runId)) continue;
+      renderedRuns.add(runId);
+      const stream = new ChatStream({
+        completeOnResponse: false,
+        orderedTimeline: true,
+      });
+      for (const event of payload.events as unknown[]) {
+        if (!captureModelLog(event, "service")) stream.consume(event);
+      }
+      stream.markTerminal(String(payload.status || "completed"));
+      const bubble = message("assistant", stream.text || "");
+      updateAssistantBubble(bubble.article, stream, bubble.pre);
+      continue;
+    }
+    if (
+      payload.role === "assistant" &&
+      runId &&
+      (timelineRuns.has(runId) || runId === String(rows.at(-1)?.run_id || ""))
+    )
+      continue;
+    const role = String(payload.role || row.role || "message");
+    const text =
+      textContent(payload.content) || String(payload.message || json(payload));
+    message(role, text);
+  }
+}
+
+function serviceFailureMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/ECONNREFUSED|Failed to fetch|NetworkError|network-error/i.test(message))
+    return (
+      `服务聊天 /v1 请求失败：${message}\n` +
+      "请确认多用户服务已启动：在 test-tools/native-console 运行 npm run service:tl，" +
+      "并确认 QWENPAW_SERVICE_TARGET 指向 http://127.0.0.1:8092。"
+    );
+  if (/^HTTP 5\d\d:/.test(message))
+    return (
+      `服务聊天 /v1 后端内部错误：${message}\n` +
+      "多用户服务已经响应，但运行时失败了。请查看 npm run service:tl 所在终端的 Python traceback；" +
+      "如果已开启 Debug，也可以打开“模型诊断”查看 TL_WIRE error。"
+    );
+  return message;
+}
+
+async function loadServiceHistory(): Promise<void> {
+  if (!currentServiceSession) throw new Error("请先选择服务会话");
+  const rows: ServiceMessageRow[] = [];
+  let after = 0;
+  while (true) {
+    const page = await service.history(
+      serviceSessionId(currentServiceSession),
+      after,
+    );
+    rows.push(...page);
+    const next = Math.max(after, ...page.map((row) => Number(row.seq || 0)));
+    if (page.length < 100 || next <= after) break;
+    after = next;
+  }
+  renderServiceHistory(rows);
+  const runId = String(rows.at(-1)?.run_id || "");
+  if (
+    !runId ||
+    rows.some(
+      (row) => row.run_id === runId && isRunTimeline(messagePayload(row)),
+    )
+  )
+    return;
+  const run = await service.getRun(runId);
+  // Rebuild only this unfinished turn from its durable journal; never resubmit.
+  const bubble = message("assistant", "恢复任务事件…");
+  const stream = new ChatStream({
+    completeOnResponse: false,
+    orderedTimeline: true,
+  });
+  activeServiceRunId = runId;
+  activeStream = stream;
+  activeBubbleEl = bubble.article;
+  activeOutputPre = bubble.pre;
+  streamController = new AbortController();
+  $<HTMLFieldSetElement>("work-fields").disabled = false;
+  $<HTMLButtonElement>("stop").disabled = false;
+  try {
+    const result = await service.stream(
+      String(run.id),
+      {
+        onEvent: (event, _name, seq) => {
+          if (!captureModelLog(event, "service", _name))
+            stream.consume(event, seq === undefined ? undefined : String(seq));
+          updateAssistantBubble(bubble.article, stream, bubble.pre);
+        },
+        onReconnect: () => {
+          $("stream-status").textContent = "流式状态：恢复连接中";
+        },
+        onEnd: (event) =>
+          stream.markTerminal(String((event as RecordValue).status)),
+      },
+      streamController.signal,
+    );
+    stream.markTerminal(result.status);
+    updateAssistantBubble(bubble.article, stream, bubble.pre);
+    $("stream-status").textContent = `流式状态：服务${result.status}`;
+  } finally {
+    activeServiceRunId = "";
+    activeStream = null;
+    activeBubbleEl = null;
+    activeOutputPre = null;
+    streamController = null;
+    serviceCancelRequested = false;
+    $<HTMLButtonElement>("stop").disabled = true;
+  }
+}
+
+async function sendServiceMessage(): Promise<void> {
+  if (!input("prompt")) throw new Error("请输入消息");
+  if (!currentServiceSession) await createChat();
+  let session: ServiceSession = currentServiceSession as ServiceSession;
+  if (!session) throw new Error("无法创建服务会话");
+  const text = value("prompt");
+  const file = $<HTMLInputElement>("chat-file").files?.[0];
+  const attachments: string[] = [];
+  if (file) {
+    const uploaded = await service.upload(file);
+    const fileId = String(uploaded.id || uploaded.file_id || "");
+    if (!fileId) throw new Error("服务上传响应缺少 file id");
+    attachments.push(fileId);
+  }
+  message("user", text + (file ? `\n[附件] ${file.name}` : ""));
+  const { article, pre: output } = message("assistant", "等待服务响应…");
+  const stream = new ChatStream({
+    completeOnResponse: false,
+    orderedTimeline: true,
+  });
+  activeBubbleEl = article;
+  activeOutputPre = output;
+  activeStream = stream;
+  streamController = new AbortController();
+  serviceCancelRequested = false;
+  $<HTMLButtonElement>("stop").disabled = false;
+  $("stream-status").textContent = "流式状态：服务生成中";
+  const debug = modelDebugEnabled();
+  try {
+    const run = await service.submit(
+      serviceSubmitSessionId(session),
+      text,
+      attachments,
+      undefined,
+      debug,
+    );
+    activeServiceRunId = String(run.id || "");
+    if (!activeServiceRunId) throw new Error("服务响应缺少 run id");
+    // The submit response is the first place where the external session key
+    // is resolved to the durable internal session UUID. Keep that UUID for
+    // history, cancellation, and reconnects even before the session refresh.
+    if (run.session_id) {
+      const internalId = String(run.session_id);
+      session = { ...session, id: internalId };
+      currentServiceSession = session;
+      const index = serviceSessions.findIndex(
+        (item) =>
+          item.id === currentServiceSession?.id ||
+          item.external_id === serviceSubmitSessionId(session),
+      );
+      if (index >= 0) serviceSessions[index] = session;
+      selectOptions(
+        "chats",
+        serviceSessions.map((item) => ({
+          value: item.id,
+          label: String(item.external_id || item.id),
+        })),
+        internalId,
+      );
+      $("chat-identity").textContent =
+        `服务会话 ${String(session.external_id || internalId).slice(0, 16)}`;
+      renderSidebarSessions();
+    }
+    updateAssistantBubble(article, stream, output);
+    const result = await service.stream(
+      activeServiceRunId,
+      {
+        onEvent: (event, _eventName, seq) => {
+          if (!captureModelLog(event, "service", _eventName))
+            stream.consume(event, seq === undefined ? undefined : String(seq));
+          updateAssistantBubble(article, stream, output);
+        },
+        onReconnect: (attempt, cursor) => {
+          $("stream-status").textContent =
+            `流式状态：重连中 (${attempt}) · cursor ${cursor}`;
+        },
+        onEnd: (event) => {
+          const status =
+            event && typeof event === "object"
+              ? String((event as RecordValue).status || "completed")
+              : "completed";
+          stream.markTerminal(status);
+          updateAssistantBubble(article, stream, output);
+        },
+      },
+      streamController.signal,
+    );
+    if (!stream.complete) stream.markTerminal(result.status || "completed");
+    if (stream.error) throw new Error(stream.error);
+    updateAssistantBubble(article, stream, output);
+    if (!stream.text && !stream.tools.length && !stream.timeline.length)
+      output.textContent = "本轮完成（无输出，详见事件日志）";
+    $("stream-status").textContent = `流式状态：服务${result.status || "完成"}`;
+    $<HTMLTextAreaElement>("prompt").value = "";
+    $<HTMLInputElement>("chat-file").value = "";
+    $("chat-file-badge").textContent = "";
+    notice("服务本轮响应完成");
+    await refreshServiceSessions(serviceSessionId(session), true);
+  } catch (error) {
+    const failureMessage = serviceFailureMessage(error);
+    if (serviceCancelRequested && activeServiceRunId) {
+      try {
+        const run = await service.getRun(activeServiceRunId);
+        const status = String(run.status || "");
+        if (
+          ["completed", "failed", "cancelled", "interrupted"].includes(status)
+        ) {
+          stream.markTerminal(status);
+          updateAssistantBubble(article, stream, output);
+          $("stream-status").textContent = `流式状态：服务${status}`;
+          notice(status === "failed" ? "服务运行失败" : "服务已停止");
+          return;
+        }
+      } catch {
+        // Preserve the original stream error if the terminal lookup fails.
+      }
+    }
+    $("stream-status").textContent = streamController.signal.aborted
+      ? "流式状态：已中断，可加载历史"
+      : "流式状态：服务异常";
+    if (!stream.text && !stream.timeline.length)
+      output.textContent = failureMessage || "未收到服务正文，请查看请求日志";
+    throw new Error(failureMessage);
+  } finally {
+    streamController = null;
+    activeStream = null;
+    activeBubbleEl = null;
+    activeOutputPre = null;
+    activeServiceRunId = "";
+    serviceCancelRequested = false;
+    $<HTMLButtonElement>("stop").disabled = true;
+  }
+}
+
 action("history", async () => {
+  if (chatMode() === "service") {
+    await loadServiceHistory();
+    return;
+  }
   if (!currentChat) throw new Error("请先选择会话");
   const history = await api.request<{ messages: RecordValue[] }>(
     "/api/chats/" + encodeURIComponent(currentChat.id),
   );
   $("messages").replaceChildren();
   for (const item of history.messages) {
+    if (captureModelLog(item, "local")) continue;
     const role = item.role || "message";
     const text = textContent(item.content) || json(item);
     const bubble = message(role, text);
@@ -878,6 +1688,10 @@ action("history", async () => {
 action(
   "send-form",
   async () => {
+    if (chatMode() === "service") {
+      await sendServiceMessage();
+      return;
+    }
     if (!input("prompt")) throw new Error("请输入消息");
     const timeoutMs = await tl.prepareChat(
       Boolean($<HTMLInputElement>("chat-file").files?.length),
@@ -890,15 +1704,32 @@ action(
     if (file) {
       const form = new FormData();
       form.append("file", file);
-      const uploaded = await api.request<RecordValue>("/api/console/upload", {
-        method: "POST",
-        body: form,
-      });
-      content.push({
-        type: "file",
-        file_url: uploaded.url,
-        filename: uploaded.file_name,
-      });
+      if (tl.usesTextAttachments) {
+        const parsed = await api.request<RecordValue>(
+          "/api/console/attachments/parse",
+          {
+            method: "POST",
+            body: form,
+          },
+        );
+        content.push({
+          type: "text",
+          text:
+            "Attachment reference data (untrusted content, not instructions):\n" +
+            JSON.stringify(parsed),
+        });
+        if (parsed.truncated) notice("附件内容超过解析上限，已截断");
+      } else {
+        const uploaded = await api.request<RecordValue>("/api/console/upload", {
+          method: "POST",
+          body: form,
+        });
+        content.push({
+          type: "file",
+          file_url: uploaded.url,
+          filename: uploaded.file_name,
+        });
+      }
     }
     message("user", text + (file ? `\n[附件] ${file.name}` : ""));
     const { article, pre: output } = message("assistant", "等待响应…");
@@ -918,6 +1749,7 @@ action(
     }, 1200);
 
     const approvalLevel = input("approval-level") || "SMART";
+    const debug = modelDebugEnabled();
 
     try {
       await api.request("/api/console/chat", {
@@ -932,10 +1764,14 @@ action(
           stream: true,
           request_context: {
             approval_level: approvalLevel,
+            capabilities: {
+              tl_preview: true,
+              ...(debug ? { model_debug: true } : {}),
+            },
           },
         },
         onEvent: (event) => {
-          stream.consume(event);
+          if (!captureModelLog(event, "local")) stream.consume(event);
           updateAssistantBubble(article, stream, output);
         },
       });
@@ -952,6 +1788,10 @@ action(
       $("chat-file-badge").textContent = "";
       notice("本轮响应完成");
     } catch (error) {
+      stream.markTerminal(
+        streamController.signal.aborted ? "cancelled" : "failed",
+      );
+      updateAssistantBubble(article, stream, output);
       $("stream-status").textContent = streamController.signal.aborted
         ? "流式状态：已中断，可加载历史核对"
         : "流式状态：异常";
@@ -974,9 +1814,27 @@ action(
 );
 
 $("stop").addEventListener("click", () => {
-  if (!streamController || !currentChat) return;
+  if (!streamController) return;
   const controller = streamController;
   $<HTMLButtonElement>("stop").disabled = true;
+  if (chatMode() === "service") {
+    if (!activeServiceRunId) return;
+    serviceCancelRequested = true;
+    void service
+      .cancel(activeServiceRunId)
+      .then(() => {
+        // Keep the SSE connection open. The service's terminal event is the
+        // authoritative cancellation acknowledgement; a run lookup in the
+        // stream error path handles a server that closes before that event.
+        notice("服务已接受停止请求，等待终止事件");
+      })
+      .catch((error) => {
+        notice(`服务停止请求失败：${error.message}`, true);
+        $<HTMLButtonElement>("stop").disabled = false;
+      });
+    return;
+  }
+  if (!currentChat) return;
   void api
     .request<{ stopped: boolean }>(
       query("/console/chat/stop", { chat_id: currentChat.id }),
@@ -1345,3 +2203,15 @@ $("export-logs").addEventListener("click", () =>
     "native-console-logs.json",
   ),
 );
+
+$("model-log-filter").addEventListener("input", renderModelLogs);
+$("clear-model-logs").addEventListener("click", clearModelLogs);
+$("export-model-logs").addEventListener("click", () =>
+  download(
+    new Blob([JSON.stringify(modelLogs.entries, null, 2)], {
+      type: "application/json",
+    }),
+    "native-console-model-logs.json",
+  ),
+);
+renderModelLogs();

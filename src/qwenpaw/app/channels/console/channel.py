@@ -180,8 +180,7 @@ class ConsoleChannel(BaseChannel):
             enabled=config.enabled,
             bot_prefix=config.bot_prefix or "",
             on_reply_sent=on_reply_sent,
-            display_config=display_config
-            or ChannelDisplayConfig.from_config(config),
+            display_config=display_config or ChannelDisplayConfig.from_config(config),
             workspace_dir=workspace_dir,
             media_dir=config.media_dir or "",
         )
@@ -235,8 +234,7 @@ class ConsoleChannel(BaseChannel):
                 if url:
                     return FileContent(
                         type=ContentType.FILE,
-                        filename=getattr(part, "filename", None)
-                        or Path(url).name,
+                        filename=getattr(part, "filename", None) or Path(url).name,
                         file_url=url,
                     )
             elif content_type == ContentType.TEXT:
@@ -282,7 +280,9 @@ class ConsoleChannel(BaseChannel):
         return request
 
     @staticmethod
-    def _client_advertises_preview(payload: Any, request: Any) -> bool:
+    def _client_advertises_preview(
+        payload: Any, request: Any, capability: str = TL_PREVIEW_CAPABILITY
+    ) -> bool:
         """Return true only for an explicit Console capability opt-in."""
         contexts: list[Any] = []
         if isinstance(payload, dict):
@@ -297,10 +297,10 @@ class ConsoleChannel(BaseChannel):
                 continue
             capabilities = context.get("capabilities")
             if isinstance(capabilities, dict):
-                if capabilities.get(TL_PREVIEW_CAPABILITY) is True:
+                if capabilities.get(capability) is True:
                     return True
             elif isinstance(capabilities, (list, tuple, set, frozenset)):
-                if TL_PREVIEW_CAPABILITY in capabilities:
+                if capability in capabilities:
                     return True
         return False
 
@@ -450,10 +450,14 @@ class ConsoleChannel(BaseChannel):
             headline_stream_states: dict[str, Any] = {}
 
             preview_enabled = self._client_advertises_preview(payload, request)
+            debug_enabled = self._client_advertises_preview(
+                payload, request, "model_debug"
+            )
             with preview_scope(
                 run_id=session_id,
                 invocation_id="invocation_" + uuid.uuid4().hex,
-                enabled=preview_enabled,
+                enabled=preview_enabled or debug_enabled,
+                model_debug=debug_enabled,
             ):
                 async for event in self._process(request):
                     event_count += 1
@@ -644,11 +648,7 @@ class ConsoleChannel(BaseChannel):
             elif t == ContentType.AUDIO and getattr(p, "data", None):
                 self._safe_print(f"{_YELLOW}🔊 [Audio]{_RESET}")
             elif t == ContentType.FILE:
-                url = (
-                    getattr(p, "file_url", None)
-                    or getattr(p, "file_id", None)
-                    or ""
-                )
+                url = getattr(p, "file_url", None) or getattr(p, "file_id", None) or ""
                 self._safe_print(f"{_YELLOW}📎 [File: {url}]{_RESET}")
         self._safe_print("")
 
@@ -729,11 +729,7 @@ class ConsoleChannel(BaseChannel):
             f"{prefix}{text}\n",
         )
         sid = (meta or {}).get("session_id")
-        if (
-            sid
-            and text.strip()
-            and not (meta or {}).get("suppress_console_push")
-        ):
+        if sid and text.strip() and not (meta or {}).get("suppress_console_push"):
             await push_store_append(sid, text.strip())
 
     async def send_content_parts(

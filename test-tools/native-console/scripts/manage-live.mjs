@@ -83,10 +83,13 @@ function getExtendedEnv() {
   const sep = path.delimiter;
   const currentPath = process.env.PATH || "";
   const newPath = [...extraPaths, currentPath].filter(Boolean).join(sep);
-  return {
+  const env = {
     ...process.env,
     PATH: newPath,
   };
+  env.QWENPAW_MODEL_DEBUG ??= "1";
+  env.QWENPAW_MODEL_DEBUG_DEFAULT ??= env.QWENPAW_MODEL_DEBUG;
+  return env;
 }
 
 // 探测启动 Python 的命令环境（优先使用 uv 环境，执行 uv run python -m qwenpaw app --port 8088）

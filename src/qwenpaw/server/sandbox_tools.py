@@ -3,14 +3,59 @@
 from __future__ import annotations
 
 import asyncio
+import codecs
 import hashlib
 import json
 import os
 import signal
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 MAX_OUTPUT = 1024 * 1024
+_READ_CHUNK_BYTES = 16 * 1024
+
+
+class _BoundedOutput:
+    """Capture one process stream while optionally forwarding decoded text."""
+
+    def __init__(
+        self,
+        stream: str,
+        on_output: Callable[[str, str], Awaitable[None]] | None,
+    ) -> None:
+        self.stream = stream
+        self.on_output = on_output
+        self.data = bytearray()
+        self.decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        self.emitted = 0
+
+    async def feed(self, chunk: bytes) -> None:
+        remaining = MAX_OUTPUT - len(self.data)
+        if remaining <= 0:
+            return
+        accepted = chunk[:remaining]
+        self.data.extend(accepted)
+        text = self.decoder.decode(accepted, final=False)
+        await self._emit(text)
+
+    async def finish(self) -> None:
+        await self._emit(self.decoder.decode(b"", final=True))
+
+    async def _emit(self, text: str) -> None:
+        if not text or self.on_output is None or self.emitted >= MAX_OUTPUT:
+            return
+        encoded = text.encode("utf-8")
+        remaining = MAX_OUTPUT - self.emitted
+        if len(encoded) > remaining:
+            text = encoded[:remaining].decode("utf-8", errors="ignore")
+            if not text:
+                return
+            encoded = text.encode("utf-8")
+        self.emitted += len(encoded)
+        await self.on_output(self.stream, text)
+
+    def text(self) -> str:
+        return bytes(self.data).decode("utf-8", errors="replace")
 
 
 class SandboxTools:
@@ -27,7 +72,12 @@ class SandboxTools:
             raise ValueError("path escapes sandbox root") from exc
         return candidate
 
-    async def shell(self, command: str, timeout: float = 30) -> dict[str, Any]:
+    async def shell(
+        self,
+        command: str,
+        timeout: float = 30,
+        on_output: Callable[[str, str], Awaitable[None]] | None = None,
+    ) -> dict[str, Any]:
         if not isinstance(command, str) or not command:
             raise ValueError("command must be a non-empty string")
         proc = await asyncio.create_subprocess_shell(
@@ -38,40 +88,82 @@ class SandboxTools:
             stderr=asyncio.subprocess.PIPE,
         )
         try:
+            deadline = asyncio.get_running_loop().time() + timeout
 
-            async def collect(stream: asyncio.StreamReader) -> bytes:
-                chunks: list[bytes] = []
-                size = 0
+            async def collect(stream: asyncio.StreamReader, name: str) -> str:
+                captured = _BoundedOutput(name, on_output)
                 while True:
-                    chunk = await stream.read(65536)
+                    chunk = await stream.read(_READ_CHUNK_BYTES)
                     if not chunk:
-                        return b"".join(chunks)[:MAX_OUTPUT]
-                    if size < MAX_OUTPUT:
-                        chunks.append(chunk[: MAX_OUTPUT - size])
-                        size += len(chunk)
+                        await captured.finish()
+                        return captured.text()
+                    await captured.feed(chunk)
 
-            out, err = await asyncio.wait_for(
-                asyncio.gather(collect(proc.stdout), collect(proc.stderr)), timeout
+            readers = asyncio.gather(
+                collect(proc.stdout, "stdout"), collect(proc.stderr, "stderr")
             )
-            await proc.wait()
-        except (asyncio.TimeoutError, asyncio.CancelledError):
             try:
-                os.killpg(proc.pid, signal.SIGTERM)
-                await asyncio.wait_for(proc.wait(), 1)
-            except Exception:
-                pass
-            finally:
-                try:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                await proc.wait()
+                out, err = await asyncio.wait_for(readers, timeout)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                if not readers.done():
+                    readers.cancel()
+                await asyncio.gather(readers, return_exceptions=True)
+                raise
+            remaining = max(0, deadline - asyncio.get_running_loop().time())
+            await asyncio.wait_for(proc.wait(), remaining)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            await self._terminate(proc)
             raise
         return {
             "exit_code": proc.returncode,
-            "stdout": out[:MAX_OUTPUT].decode(errors="replace"),
-            "stderr": err[:MAX_OUTPUT].decode(errors="replace"),
+            "stdout": out,
+            "stderr": err,
         }
+
+    @staticmethod
+    async def _terminate(proc: asyncio.subprocess.Process) -> None:
+        """Terminate the tool process and make a best effort to reap it.
+
+        POSIX hosts signal the whole process group created by
+        ``start_new_session=True`` so a shell's descendants die with it.
+        Windows has neither ``os.killpg`` nor ``signal.SIGKILL`` -- merely
+        touching them raises ``AttributeError`` -- so it falls back to
+        terminating the direct child.  Never let that platform difference
+        replace the caller's timeout/cancellation with a new exception.
+        """
+        killpg = getattr(os, "killpg", None)
+        if killpg is not None:
+            try:
+                killpg(proc.pid, signal.SIGTERM)
+            except (ProcessLookupError, OSError):
+                pass
+        else:
+            try:
+                proc.terminate()
+            except (ProcessLookupError, OSError):
+                pass
+
+        try:
+            await asyncio.wait_for(asyncio.shield(proc.wait()), 1)
+        except (asyncio.TimeoutError, asyncio.CancelledError, OSError):
+            pass
+
+        sigkill = getattr(signal, "SIGKILL", None)
+        if killpg is not None and sigkill is not None:
+            try:
+                killpg(proc.pid, sigkill)
+            except (ProcessLookupError, OSError):
+                pass
+        else:
+            try:
+                proc.kill()
+            except (ProcessLookupError, OSError):
+                pass
+
+        try:
+            await asyncio.shield(proc.wait())
+        except (asyncio.CancelledError, OSError):
+            pass
 
     async def read_file(self, path: str) -> dict[str, Any]:
         target = self.path(path)

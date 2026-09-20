@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Console APIs: push messages, chat, and file upload for chat."""
+
 from __future__ import annotations
 
 import asyncio
@@ -33,7 +34,6 @@ from ..agent_context import get_agent_for_request
 from ..approvals.display import approval_display_fields
 from ..chats.title_generator import generate_and_update_title
 from ..utils import check_upload_size
-
 
 logger = logging.getLogger(__name__)
 
@@ -186,8 +186,7 @@ async def _persist_pending_project_dirs(
         for path, label in normalize_project_dir_list(pending):
             if not path.is_dir():
                 logger.warning(
-                    "Ignoring pending project dir that is not a "
-                    "directory: %s",
+                    "Ignoring pending project dir that is not a " "directory: %s",
                     path,
                 )
                 continue
@@ -246,8 +245,7 @@ def _extract_session_and_payload(request_data: Union[AgentRequest, dict]):
                 # Coerce raw dicts to typed Content models so downstream
                 # getattr checks (e.g. _content_has_text) see real attrs.
                 content_parts.extend(
-                    _coerce_content_item(c)
-                    for c in (content_part["content"] or [])
+                    _coerce_content_item(c) for c in (content_part["content"] or [])
                 )
                 if isinstance(content_part.get("metadata"), dict):
                     message_metadata = content_part["metadata"]
@@ -520,6 +518,26 @@ async def post_console_chat_stop(
         stopped,
     )
     return {"stopped": stopped}
+
+
+@router.post("/attachments/parse", response_model=dict)
+async def parse_console_attachment(request: Request, file: UploadFile = File(...)):
+    """Extract a user-uploaded document for text-only model transports."""
+    from ...attachments import AttachmentError, extract_attachment
+
+    await get_agent_for_request(request)
+    try:
+        content = await file.read(10 * 1024 * 1024 + 1)
+        if len(content) > 10 * 1024 * 1024:
+            raise HTTPException(413, "Attachment exceeds 10 MiB")
+        try:
+            return await asyncio.to_thread(
+                extract_attachment, file.filename or "file", content
+            )
+        except AttachmentError as exc:
+            raise HTTPException(422, str(exc)) from exc
+    finally:
+        await file.close()
 
 
 @router.post("/upload", response_model=dict, summary="Upload file for chat")

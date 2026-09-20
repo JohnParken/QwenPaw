@@ -88,7 +88,7 @@ test("读取 tlproxy/deepseek 标签、保存完整 TL 配置并区分连接测�
   );
 });
 
-test("选择 Agent 的 TL 模型后，附件在上传前被拒绝且文本走 console chat", async ({
+test("选择 Agent 的 TL 模型后，附件解析成文本再走 console chat", async ({
   page,
   mock,
 }) => {
@@ -106,6 +106,18 @@ test("选择 Agent 的 TL 模型后，附件在上传前被拒绝且文本走 co
   });
 
   await page.locator('button[data-tab="chat"]').click();
+  await page.route("**/api/console/attachments/parse", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        filename: "notes.txt",
+        text: "parsed document text",
+        truncated: false,
+        format: "text",
+      }),
+    }),
+  );
   await page.locator("#prompt").fill("with attachment");
   await page.locator("#chat-file").setInputFiles({
     name: "blocked.txt",
@@ -113,17 +125,26 @@ test("选择 Agent 的 TL 模型后，附件在上传前被拒绝且文本走 co
     buffer: Buffer.from("blocked"),
   });
   await page.locator("#send").click();
-  await expect(page.locator("#notice")).toContainText("TL v1 仅支持文本输入");
+  await expect(page.locator("#messages .assistant pre").last()).toHaveText(
+    "Hello world",
+  );
   expect(calls(mock, "POST", "/api/console/upload")).toHaveLength(0);
-  expect(calls(mock, "POST", "/api/chats")).toHaveLength(0);
-  expect(calls(mock, "POST", "/api/console/chat")).toHaveLength(0);
+  const attached = calls(mock, "POST", "/api/console/chat").at(-1)!.body as any;
+  expect(
+    attached.input[0].content.every((part: any) => part.type === "text"),
+  ).toBe(true);
+  expect(JSON.stringify(attached.input)).toContain("parsed document text");
 
   await page.locator("#chat-file").setInputFiles([]);
+  await expect(page.locator("#stream-status")).toContainText("完成");
   await page.locator("#prompt").fill("plain TL message");
   await page.locator("#send").click();
   await expect(page.locator("#messages .assistant pre").last()).toHaveText(
     "Hello world",
   );
+  await expect
+    .poll(() => calls(mock, "POST", "/api/console/chat").length)
+    .toBe(2);
   const send = calls(mock, "POST", "/api/console/chat").at(-1)!;
   expect(send.body).toMatchObject({
     user_id: "default",

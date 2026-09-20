@@ -55,6 +55,12 @@ async def test_debug_wire_logs_request_response_and_sse(caplog, stream):
     assert any(r["event"] == "response_body" for r in records)
     assert sum(r["event"] == "sse_event" for r in records) == (2 if stream else 0)
     assert all(r.get("attempt_id") and r.get("request_id") for r in records)
+    requests = [r for r in records if r["event"] == "request"]
+    assert {r["url"] for r in requests} == {
+        "http://tl/chatbbc/init_session",
+        "http://tl/chatbbc/chat",
+    }
+    assert all(r["headers"]["authorization"] == "[REDACTED]" for r in requests)
     assert "system-marker" in caplog.text and "user-marker" in caplog.text
     assert "answer-marker" in caplog.text and "hidden-key" not in caplog.text
 
@@ -198,6 +204,51 @@ async def test_wire_shape_and_non_stream_text(success_code) -> None:
     assert init["requestId"] != chat["requestId"]
     assert requests[0].headers["authorization"] == "Bearer secret"
     assert requests[1].headers["x-trace"] == "test"
+
+
+@pytest.mark.asyncio
+async def test_request_log_contains_final_url_and_redacted_headers(caplog) -> None:
+    caplog.set_level(logging.DEBUG, logger="qwenpaw.providers.tl_wire")
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("init_session"):
+            return httpx.Response(200, json={"code": 0, "data": {"session_id": "s"}})
+        return httpx.Response(200, json={"code": 0, "data": {"txt": "ok"}})
+
+    async with _client(handler) as client:
+        transport = TLTransport(
+            "https://tl.example/base/",
+            TLConfig(),
+            api_key="api-secret",
+            custom_headers={"Cookie": "session=cookie-secret", "X-Trace": "trace-secret"},
+            client=client,
+        )
+        [text async for text in transport.iter_text("sys", "user", stream=False)]
+
+    records = [json.loads(r.message.split("TL_WIRE ", 1)[1])
+               for r in caplog.records
+               if "TL_WIRE " in r.message
+               and json.loads(r.message.split("TL_WIRE ", 1)[1])["event"] == "request"]
+    assert len(records) == 2
+    for record in records:
+        assert record["url"] == "https://tl.example/base/chatbbc/" + (
+            "init_session" if record["path"].endswith("init_session") else "chat"
+        )
+        assert record["headers"]["authorization"] == "[REDACTED]"
+        assert record["headers"]["cookie"] == "[REDACTED]"
+        assert record["headers"]["x-trace"] == "[REDACTED]"
+        assert record["headers"]["content-type"] == "application/json"
+        expected_length = len(
+            json.dumps(
+                record["payload"],
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        assert record["headers"]["content-length"] == str(expected_length)
+    rendered = caplog.text
+    for secret in ("api-secret", "cookie-secret", "trace-secret"):
+        assert secret not in rendered
 
 
 @pytest.mark.asyncio

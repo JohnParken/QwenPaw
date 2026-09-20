@@ -1,0 +1,102 @@
+- generic [ref=f39e2]:
+  - complementary [ref=f39e3]:
+    - generic [ref=f39e5]:
+      - generic [ref=f39e6]: 🐾
+      - generic [ref=f39e7]:
+        - heading "QwenPaw Native" [level=1] [ref=f39e8]:
+          - text: QwenPaw
+          - generic [ref=f39e9]: Native
+        - paragraph [ref=f39e10]: 轻量原生测试验证台
+    - generic [ref=f39e11]:
+      - generic [ref=f39e12]:
+        - generic [ref=f39e13]: 当前生效 Agent
+        - generic [ref=f39e14]: Service
+      - combobox "切换当前 Agent" [disabled] [ref=f39e15] [cursor=pointer]:
+        - option "default" [selected]
+    - navigation "功能页" [ref=f39e16]:
+      - button "💬 核心会话" [ref=f39e17] [cursor=pointer]:
+        - generic [ref=f39e18]: 💬
+        - text: 核心会话
+      - button "📁 工作区文件" [ref=f39e19] [cursor=pointer]:
+        - generic [ref=f39e20]: 📁
+        - text: 工作区文件
+      - button "📥 收件箱与任务" [ref=f39e21] [cursor=pointer]:
+        - generic [ref=f39e22]: 📥
+        - text: 收件箱与任务
+      - button "🧩 智能体技能" [ref=f39e23] [cursor=pointer]:
+        - generic [ref=f39e24]: 🧩
+        - text: 智能体技能
+      - button "⚙️ 管理与配置" [ref=f39e25] [cursor=pointer]:
+        - generic [ref=f39e26]: ⚙️
+        - text: 管理与配置
+    - generic [ref=f39e27]:
+      - generic [ref=f39e28]:
+        - generic [ref=f39e29]: 会话列表
+        - generic [ref=f39e30]:
+          - button "+ 新建" [ref=f39e31] [cursor=pointer]
+          - button "刷新" [ref=f39e32] [cursor=pointer]
+      - generic [ref=f39e33]:
+        - button "bffb7032-044a-4f23-9e3f-182f74e34e20" [ref=f39e126] [cursor=pointer]
+        - button "cf19e9b0-7c8c-4213-847b-2a3b28164108" [ref=f39e128] [cursor=pointer]
+      - combobox [disabled] [ref=f39e34]:
+        - option "选择服务会话"
+        - option "bffb7032-044a-4f23-9e3f-182f74e34e20" [selected]
+        - option "cf19e9b0-7c8c-4213-847b-2a3b28164108"
+    - button "服务已连接 · default" [ref=f39e114] [cursor=pointer]
+  - generic [ref=f39e39]:
+    - banner [ref=f39e40]:
+      - generic [ref=f39e41]:
+        - generic [ref=f39e42]: 服务会话 bffb7032-044a-4f
+        - generic [ref=f39e43]: "服务: mock-stream-demo"
+        - generic [ref=f39e45]: 服务聊天 /v1
+      - generic [ref=f39e46]:
+        - generic [ref=f39e218]:
+          - generic [ref=f39e219]: "Context: 就绪"
+          - generic [ref=f39e220]: 等待对话生成以计算窗口消耗
+        - generic [ref=f39e54]: 流式状态：空闲
+        - button "停止生成" [ref=f39e133] [cursor=pointer]
+        - button "📋 协议日志 7" [ref=f39e221] [cursor=pointer]:
+          - generic [ref=f39e56]: 📋 协议日志
+          - generic [ref=f39e57]: "7"
+    - status [ref=f39e75]: 已批准服务工具执行 (exact)
+    - group "功能验证" [ref=f39e77]:
+      - generic [ref=f39e79]:
+        - log "聊天消息" [ref=f39e80]:
+          - article [ref=f39e135]:
+            - generic [ref=f39e136]: U
+            - generic [ref=f39e137]:
+              - generic [ref=f39e138]: User
+              - generic [ref=f39e140]: 恢复审批任务验收
+          - article [ref=f39e142]:
+            - generic [ref=f39e143]: 🐾
+            - generic [ref=f39e144]:
+              - generic [ref=f39e145]: QwenPaw Agent (default)
+              - generic [ref=f39e148]:
+                - paragraph [ref=f39e222]: 我将演示一次需要审批的工具调用。
+                - group [ref=f39e223]:
+                  - generic "💻 终端命令 Shell ⚡ 执行中…" [ref=f39e224] [cursor=pointer]:
+                    - generic [ref=f39e225]:
+                      - generic [ref=f39e226]: 💻 终端命令 Shell
+                      - generic [ref=f39e227]: ⚡ 执行中…
+                  - generic [ref=f39e228]:
+                    - generic [ref=f39e229]:
+                      - generic [ref=f39e230]: $
+                      - code [ref=f39e231]: echo streaming-demo
+                    - generic [ref=f39e232]:
+                      - text: "控制台输出 Output:"
+                      - generic [ref=f39e233]: "[模拟输出] step 1/5"
+        - generic [ref=f39e81]:
+          - generic [ref=f39e82]: "⚡ 快捷能力测试:"
+          - button "基础问答" [ref=f39e83] [cursor=pointer]
+          - button "深度推理 (R1)" [ref=f39e84] [cursor=pointer]
+          - button "文件读写工具" [ref=f39e85] [cursor=pointer]
+          - button "Shell 工具" [ref=f39e86] [cursor=pointer]
+          - button "触发安全审批" [ref=f39e87] [cursor=pointer]
+        - generic [ref=f39e89]:
+          - textbox "输入给 QwenPaw Agent 的指令... (Enter 发送，Shift+Enter 换行)" [ref=f39e90]
+          - generic [ref=f39e91]:
+            - generic [ref=f39e92]:
+              - generic [ref=f39e93] [cursor=pointer]: 📎 上传附件
+              - generic [ref=f39e119]: 当前服务未启用附件存储
+              - button "加载历史" [ref=f39e94] [cursor=pointer]
+            - button "发送 ↵" [ref=f39e96] [cursor=pointer]

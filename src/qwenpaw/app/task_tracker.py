@@ -50,6 +50,7 @@ def _preview_payload(sse: Any) -> dict[str, Any] | None:
         "preview_start",
         "preview_update",
         "preview_clear",
+        "model_log",
     }:
         return None
     return payload
@@ -181,8 +182,7 @@ class TaskTracker:
             return {
                 run_key: state.task
                 for run_key, state in self._runs.items()
-                if not state.task.done()
-                and (owner is None or state.owner is owner)
+                if not state.task.done() and (owner is None or state.owner is owner)
             }
 
     async def wait_tasks_done(
@@ -352,8 +352,7 @@ class TaskTracker:
                 except Exception:
                     logger.exception("run error run_key=%s", run_key)
                     err_sse = (
-                        "data: "
-                        f"{json.dumps({'error': 'internal server error'})}\n\n"
+                        "data: " f"{json.dumps({'error': 'internal server error'})}\n\n"
                     )
                     tracker = tracker_ref()
                     if tracker is not None:
@@ -457,9 +456,7 @@ class TaskTracker:
                 event = durable_task.result()
                 # Cancel prefetch before yielding queued previews: otherwise
                 # it can take a clear while this generator is suspended.
-                async for item in drain_preview_events(
-                    preview_queue, preview_task
-                ):
+                async for item in drain_preview_events(preview_queue, preview_task):
                     yield item
                 preview_task = None
                 if event is _SENTINEL:
@@ -471,11 +468,7 @@ class TaskTracker:
                 if task is not None and not task.done():
                     task.cancel()
             await asyncio.gather(
-                *(
-                    task
-                    for task in (durable_task, preview_task)
-                    if task is not None
-                ),
+                *(task for task in (durable_task, preview_task) if task is not None),
                 return_exceptions=True,
             )
             await self.detach_subscriber(run_key, queue)

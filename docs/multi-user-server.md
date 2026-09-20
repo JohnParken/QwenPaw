@@ -161,3 +161,9 @@ API `/health` 用于进程存活，`/ready` 检查数据库表；`/internal/metr
 2026-09-17 本机测试：服务端 28 项通过，包括真实数据库、向量隔离、审批、租约失效、取消竞争、Redis 故障补读、文件归属、浏览器重建和 stdio MCP 复用。Runtime/Workspace 回归中发现 7 项审批测试失败，已在未修改的 HEAD 基线复现。尚未执行进程 SIGKILL 的完整集群演练、真实 S3/PVC 一致备份恢复和 100 个工具 Pod 的 30 分钟测试。
 
 100 任务槽/500 SSE 的本机多轮短测：5 秒升压后持续 60 秒，1,932 个任务全部完成，没有记录错误；提交 P95 94ms、持久化事件接收 P95 200ms。原始指标见 [server-load-smoke.json](server-load-smoke.json)。API、Worker 和 Mock 模型运行于同一本机 Python 进程，PostgreSQL 使用本机独立进程。先前的大连接池压测受到客户端空闲连接扫描开销干扰，已通过客户端性能分析确认并改为每用户小连接池；默认升压时间可用 `--ramp-seconds` 调整。短测未覆盖 30 分钟内存稳定性、多副本进程故障、真实模型与工具 Pod，因此当前交付可用于联调，不能标为完成全部生产验收。
+
+
+## TL Provider
+
+多用户 Worker 可通过平台 AssistantDefinition 配置 TL Provider。
+本地启动与生产配置见 [多用户 TL 接入](multi-user-tl.md)。

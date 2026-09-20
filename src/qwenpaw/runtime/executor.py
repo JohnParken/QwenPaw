@@ -100,9 +100,7 @@ class AgentExecutor:
                     event = agent_task.result()
                 except StopAsyncIteration:
                     preview.clear_active("error")
-                    async for item in drain_preview_events(
-                        preview.queue, preview_task
-                    ):
+                    async for item in drain_preview_events(preview.queue, preview_task):
                         yield item
                     return
 
@@ -110,9 +108,7 @@ class AgentExecutor:
                 # before yielding its validated model response. Drain those
                 # synchronous queue entries before translating the durable
                 # event so the clear always precedes formal content.
-                async for item in drain_preview_events(
-                    preview.queue, preview_task
-                ):
+                async for item in drain_preview_events(preview.queue, preview_task):
                     yield item
 
                 self._maybe_stamp_finished_at(event)
@@ -123,6 +119,21 @@ class AgentExecutor:
         except asyncio.CancelledError:
             preview.clear_active("cancel")
             raise
+        except Exception as exc:
+            from ..providers.tl_wire_log import log_wire
+
+            log_wire(
+                event="error",
+                payload={
+                    "stage": "agent_sse_translate",
+                    "exception_type": type(exc).__name__,
+                },
+            )
+            preview.clear_active("error")
+            # Preserve diagnostics queued synchronously just before a failure.
+            async for item in drain_preview_events(preview.queue, preview_task):
+                yield item
+            raise
         except BaseException:
             preview.clear_active("error")
             raise
@@ -130,9 +141,7 @@ class AgentExecutor:
             for task in (agent_task, preview_task):
                 if not task.done():
                     task.cancel()
-            await asyncio.gather(
-                agent_task, preview_task, return_exceptions=True
-            )
+            await asyncio.gather(agent_task, preview_task, return_exceptions=True)
             close = getattr(agent_iter, "aclose", None)
             if callable(close):
                 try:
@@ -186,8 +195,7 @@ class AgentExecutor:
             if target is None or getattr(target, "finished_at", None):
                 return
             target.finished_at = (
-                getattr(event, "created_at", None)
-                or datetime.now().isoformat()
+                getattr(event, "created_at", None) or datetime.now().isoformat()
             )
         except Exception:  # pylint: disable=broad-except
             logger.warning(

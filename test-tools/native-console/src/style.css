@@ -548,6 +548,29 @@ textarea {
   font-weight: 700;
 }
 
+.service-mode-badge {
+  background: #f0f5ff;
+  color: #1d39c4;
+}
+
+.debug-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-sm);
+  background: var(--app-surface-subtle);
+  color: var(--app-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.debug-toggle input {
+  accent-color: var(--app-accent);
+}
+
 /* ─── Tabs & Views Area ────────────────────────────────────── */
 .app-view-body {
   flex: 1;
@@ -756,6 +779,22 @@ textarea {
   font-size: 12px;
 }
 
+.tool-card-details {
+  margin: 0;
+}
+
+.tool-card-details > summary {
+  list-style: none;
+}
+
+.tool-card-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-card-summary {
+  cursor: pointer;
+}
+
 .tool-card-header {
   padding: 8px 12px;
   display: flex;
@@ -797,12 +836,68 @@ textarea {
   color: #cf1322;
 }
 
+.tool-status-badge.preparing,
+.tool-status-badge.unknown {
+  background: #f5f5f5;
+  color: #595959;
+}
+
+.tool-status-badge.awaiting_approval {
+  background: #fffbe6;
+  color: #d46b08;
+}
+
+.tool-status-badge.denied,
+.tool-status-badge.cancelled {
+  background: #fff1f0;
+  color: #a8071a;
+}
+
 .tool-card-body {
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   background: var(--app-surface);
+}
+
+.ordered-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.timeline-text {
+  line-height: 1.65;
+}
+
+.preview-card {
+  border: 1px dashed var(--app-accent-border);
+  border-radius: var(--radius-sm);
+  background: var(--app-accent-soft);
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.preview-card.cleared {
+  opacity: 0.68;
+}
+
+.preview-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--app-accent-text);
+  font-weight: 600;
+}
+
+.preview-card pre {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  font-family: monospace;
+  max-height: 180px;
+  overflow: auto;
 }
 
 .tool-block-label {
@@ -1240,7 +1335,8 @@ textarea {
 
 /* ─── Protocol & SSE Logs Drawer ───────────────────────────── */
 .logs-drawer {
-  width: 380px;
+  width: min(380px, 100%);
+  max-width: 100%;
   flex-shrink: 0;
   height: 100%;
   background: var(--app-surface);
@@ -1249,6 +1345,40 @@ textarea {
   display: flex;
   flex-direction: column;
   z-index: 10;
+}
+
+.model-logs-drawer {
+  width: min(440px, 100%);
+  max-width: 100%;
+  flex-shrink: 0;
+  height: 100%;
+  background: var(--app-surface);
+  border-left: 1px solid var(--app-border);
+  box-shadow: var(--app-shadow-sm);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+
+.model-logs-drawer.closed {
+  display: none;
+}
+
+.model-log-empty {
+  margin: 0;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--app-border-subtle);
+  color: var(--app-text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.model-logs-drawer .logs-drawer-list details {
+  border-left-width: 3px;
+}
+
+.model-logs-drawer .logs-drawer-list details:has(summary) {
+  border-left-color: var(--app-accent-border);
 }
 
 .logs-drawer.closed {
@@ -2184,4 +2314,25 @@ button.secondary {
   width: 100%;
   padding: 5px;
   font-size: 12px;
+}
+
+/* Service policy belongs to the platform; the local selector is not applicable. */
+body[data-chat-mode="service"] .approval-level-box,
+body[data-chat-mode="service"] #active-agent-badge {
+  display: none;
+}
+.app-header {
+  height: auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.header-left,
+.header-right {
+  flex-wrap: wrap;
+}
+.header-tag,
+.header-btn {
+  white-space: nowrap;
 }

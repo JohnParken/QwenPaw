@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
 from agentscope.message import (
     Msg,
     TextBlock,
@@ -191,3 +192,56 @@ class TestStripMediaBlocksFromMemory:
         agent = _agent_with_context([msg1, msg2])
         removed = agent._strip_media_blocks_from_memory()
         assert removed == 2
+
+
+@pytest.mark.asyncio
+async def test_tl_file_result_uses_text_receipt_without_mutating_attachment(
+    monkeypatch,
+):
+    """TL receives a text-only copy while the frontend keeps the file block."""
+    from agentscope.message import DataBlock, URLSource
+    import qwenpaw.agents.react_agent as react_agent_module
+
+    tool_result = ToolResultBlock(
+        id="call-send-file",
+        name="send_file_to_user",
+        state=ToolResultState.SUCCESS,
+        output="seed",
+    )
+    attachment = DataBlock(
+        source=URLSource(
+            url="file:///tmp/report.pdf",
+            media_type="application/pdf",
+        ),
+        name="report.pdf",
+    )
+    tool_result.output = [
+        attachment,
+        TextBlock(text="File sent successfully."),
+    ]
+    agent = object.__new__(QwenPawAgent)
+    agent.name = "test-agent"
+    agent.model = SimpleNamespace(count_tokens=_count_one_token)
+    agent.context_config = SimpleNamespace(tool_result_limit=100)
+    agent._get_active_formatter = lambda: object()
+    monkeypatch.setattr(react_agent_module, "is_tl_formatter", lambda _: True)
+
+    reserved, offloaded = await agent._split_tool_result_for_compression(
+        tool_result,
+    )
+
+    assert offloaded is None
+    assert all(
+        getattr(block, "type", None) == "text"
+        for block in reserved.output
+    )
+    receipt = reserved.output[0].text
+    assert "File sent successfully." in receipt
+    assert "report.pdf" in receipt
+    assert "file:///tmp/report.pdf" in receipt
+    assert tool_result.output[0] is attachment
+    assert isinstance(tool_result.output[0], DataBlock)
+
+
+async def _count_one_token(*_args, **_kwargs):
+    return 1

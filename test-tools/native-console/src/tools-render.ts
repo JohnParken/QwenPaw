@@ -1,18 +1,57 @@
 import { escapeHtml } from "./markdown";
 import type { ToolCallItem } from "./chat";
 
-export function renderToolCard(tool: ToolCallItem): HTMLElement {
-  const card = document.createElement("div");
+export function renderToolCard(
+  tool: ToolCallItem,
+  existing?: HTMLElement,
+): HTMLElement {
+  const card = existing || document.createElement("div");
+  const expanded =
+    card.querySelector<HTMLDetailsElement>("details")?.open ?? true;
   card.className = "tool-card";
   card.dataset.toolId = tool.id;
 
   const statusClass = tool.status;
-  const statusLabel =
-    tool.status === "running"
-      ? "⚡ 执行中…"
-      : tool.status === "completed"
-        ? "✓ 成功"
-        : "✗ 失败";
+  const statusLabel: Record<string, string> = {
+    preparing: "准备中…",
+    awaiting_approval: "等待审批",
+    running: "⚡ 执行中…",
+    completed: "✓ 成功",
+    failed: "✗ 失败",
+    denied: "⊘ 已拒绝",
+    unknown: "? 结果未知",
+    cancelled: "Ⅱ 已取消",
+  };
+  const label = statusLabel[tool.status] || "? 未知状态";
+
+  const finalize = (): HTMLElement => {
+    const header = card.querySelector<HTMLElement>(".tool-card-header");
+    const body = card.querySelector<HTMLElement>(".tool-card-body");
+    if (header && body) {
+      const details = document.createElement("details");
+      details.className = "tool-card-details";
+      details.open = expanded;
+      const summary = document.createElement("summary");
+      summary.className = "tool-card-summary";
+      summary.append(header);
+      details.append(summary, body);
+      card.replaceChildren(details);
+    }
+    try {
+      const result = JSON.parse(tool.output || "null");
+      const file = result?.file || result?.result?.file;
+      if (file?.id) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = `下载产物：${String(file.name || file.id)}`;
+        button.dataset.fileId = String(file.id);
+        card.querySelector(".tool-card-body")?.append(button);
+      }
+    } catch {
+      /* Plain text results have no file reference. */
+    }
+    return card;
+  };
 
   let parsedArgs: Record<string, any> = {};
   try {
@@ -31,10 +70,27 @@ export function renderToolCard(tool: ToolCallItem): HTMLElement {
   ) {
     const cmd = parsedArgs.command || parsedArgs.cmd || tool.args;
     const cwd = parsedArgs.cwd || parsedArgs.workdir || "";
+    let output = tool.output || "";
+    let exitCode: unknown;
+    try {
+      const result = JSON.parse(output);
+      const execution = result?.result || result;
+      if (
+        typeof execution?.stdout === "string" ||
+        typeof execution?.stderr === "string"
+      ) {
+        output =
+          String(execution.stdout || "") + String(execution.stderr || "");
+        exitCode = execution.exit_code;
+      }
+    } catch {
+      /* Incremental log chunks remain plain text. */
+    }
+
     card.innerHTML = `
       <div class="tool-card-header tool-header-shell">
         <span class="tool-name-tag">💻 终端命令 Shell</span>
-        <span class="tool-status-badge ${statusClass}">${statusLabel}</span>
+        <span class="tool-status-badge ${statusClass}">${label}</span>
       </div>
       <div class="tool-card-body">
         <div class="tool-shell-cmd-row">
@@ -42,16 +98,16 @@ export function renderToolCard(tool: ToolCallItem): HTMLElement {
           <code class="tool-shell-cmd">${escapeHtml(String(cmd))}</code>
         </div>
         ${
-          tool.output
+          output
             ? `<div class="tool-output-box">
-                <span class="tool-block-label">控制台输出 Output:</span>
-                <pre class="tool-code-pre shell-output">${escapeHtml(tool.output)}</pre>
+                <span class="tool-block-label">控制台输出 Output:${exitCode !== undefined ? ` · exit ${escapeHtml(String(exitCode))}` : ""}</span>
+                <pre class="tool-code-pre shell-output">${escapeHtml(output)}</pre>
               </div>`
             : ""
         }
       </div>
     `;
-    return card;
+    return finalize();
   }
 
   // 2. File I/O: write_file / edit_file / append_file
@@ -93,7 +149,7 @@ export function renderToolCard(tool: ToolCallItem): HTMLElement {
     card.innerHTML = `
       <div class="tool-card-header tool-header-file">
         <span class="tool-name-tag">📝 文件修改 ${isEdit ? "Diff" : "Write"}</span>
-        <span class="tool-status-badge ${statusClass}">${statusLabel}</span>
+        <span class="tool-status-badge ${statusClass}">${label}</span>
       </div>
       <div class="tool-card-body">
         <div class="tool-file-path-row">
@@ -117,7 +173,7 @@ export function renderToolCard(tool: ToolCallItem): HTMLElement {
         }
       </div>
     `;
-    return card;
+    return finalize();
   }
 
   // 3. Subagent / Multi-agent delegation
@@ -143,7 +199,7 @@ export function renderToolCard(tool: ToolCallItem): HTMLElement {
     card.innerHTML = `
       <div class="tool-card-header tool-header-subagent">
         <span class="tool-name-tag">🤖 子智能体协作: ${escapeHtml(String(subName))}</span>
-        <span class="tool-status-badge ${statusClass}">${statusLabel}</span>
+        <span class="tool-status-badge ${statusClass}">${label}</span>
       </div>
       <div class="tool-card-body">
         <div class="subagent-prompt-box">
@@ -160,7 +216,7 @@ export function renderToolCard(tool: ToolCallItem): HTMLElement {
         }
       </div>
     `;
-    return card;
+    return finalize();
   }
 
   // 4. Browser / Screenshot / Visual
@@ -169,7 +225,8 @@ export function renderToolCard(tool: ToolCallItem): HTMLElement {
     name.includes("browser") ||
     name.includes("view_image")
   ) {
-    const url = parsedArgs.url || parsedArgs.Url || "";
+    const candidate = String(parsedArgs.url || parsedArgs.Url || "");
+    const url = /^https?:\/\//i.test(candidate) ? candidate : "";
     // Check if output has base64 image or image url
     let imgSrc = "";
     if (tool.output) {
@@ -187,14 +244,14 @@ export function renderToolCard(tool: ToolCallItem): HTMLElement {
     card.innerHTML = `
       <div class="tool-card-header tool-header-browser">
         <span class="tool-name-tag">🌐 网页与视觉工具 ${escapeHtml(tool.name)}</span>
-        <span class="tool-status-badge ${statusClass}">${statusLabel}</span>
+        <span class="tool-status-badge ${statusClass}">${label}</span>
       </div>
       <div class="tool-card-body">
-        ${url ? `<div class="tool-url-row">🔗 目标 URL: <a href="${escapeHtml(url)}" target="_blank">${escapeHtml(url)}</a></div>` : ""}
+        ${url ? `<div class="tool-url-row">🔗 目标 URL: <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a></div>` : ""}
         ${
           imgSrc
             ? `<div class="tool-image-preview">
-                <img src="${imgSrc}" alt="Screenshot preview" class="screenshot-img" />
+                <img src="${escapeHtml(imgSrc)}" alt="Screenshot preview" class="screenshot-img" />
               </div>`
             : ""
         }
@@ -208,7 +265,7 @@ export function renderToolCard(tool: ToolCallItem): HTMLElement {
         }
       </div>
     `;
-    return card;
+    return finalize();
   }
 
   // 5. Batch tool execution: run_tool_batch
@@ -217,7 +274,7 @@ export function renderToolCard(tool: ToolCallItem): HTMLElement {
     card.innerHTML = `
       <div class="tool-card-header tool-header-batch">
         <span class="tool-name-tag">📦 批量工具并发执行 (${toolsList.length} 项)</span>
-        <span class="tool-status-badge ${statusClass}">${statusLabel}</span>
+        <span class="tool-status-badge ${statusClass}">${label}</span>
       </div>
       <div class="tool-card-body">
         <div class="tool-batch-list">
@@ -243,14 +300,14 @@ export function renderToolCard(tool: ToolCallItem): HTMLElement {
         }
       </div>
     `;
-    return card;
+    return finalize();
   }
 
   // 6. Default generic tool card
   card.innerHTML = `
     <div class="tool-card-header">
       <span class="tool-name-tag">🔧 ${escapeHtml(tool.name)}</span>
-      <span class="tool-status-badge ${statusClass}">${statusLabel}</span>
+      <span class="tool-status-badge ${statusClass}">${label}</span>
     </div>
     <div class="tool-card-body">
       <span class="tool-block-label">输入参数 Arguments:</span>
@@ -262,5 +319,5 @@ export function renderToolCard(tool: ToolCallItem): HTMLElement {
       }
     </div>
   `;
-  return card;
+  return finalize();
 }

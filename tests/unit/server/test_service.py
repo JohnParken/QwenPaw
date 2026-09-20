@@ -563,10 +563,14 @@ async def test_durable_gateway_approval_and_expiry(store, config):
     call = asyncio.create_task(gateway.invoke(ctx, "call", "shell", {}))
     for _ in range(100):
         events = await store.events("a", run["id"], 0, 100)
-        if events:
+        if any(e["payload"].get("type") == "approval" for e in events):
             break
         await asyncio.sleep(0.01)
-    approval = events[0]["payload"]["approval"]
+    approval = next(
+        e["payload"]["approval"]
+        for e in events
+        if e["payload"].get("type") == "approval"
+    )
     with pytest.raises(NotFound):
         await store.decide("b", approval["id"], True)
     await store.decide("a", approval["id"], True)

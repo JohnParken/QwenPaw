@@ -37,3 +37,37 @@ class S3Objects:
             Params={"Bucket": self.bucket, "Key": key},
             ExpiresIn=300,
         )
+
+
+class MemoryObjects:
+    """Bounded local-development storage, private to the in-process API.
+
+    Never used by production serve. Access is only through owned file IDs.
+    """
+
+    def __init__(self, max_bytes=64 * 1024 * 1024):
+        self.items = {}
+        self.max_bytes = max_bytes
+        self.size = 0
+
+    async def put(self, key, content):
+        from .contracts import Conflict
+
+        size = self.size - len(self.items.get(key, b"")) + len(content)
+        if size > self.max_bytes:
+            raise Conflict("Local file storage is full; delete unused files")
+        self.items[key] = bytes(content)
+        self.size = size
+
+    async def get(self, key):
+        from .contracts import NotFound
+
+        if key not in self.items:
+            raise NotFound("File not found")
+        return self.items[key]
+
+    async def delete(self, key):
+        self.size -= len(self.items.pop(key, b""))
+
+    async def url(self, key):
+        return None  # Download via authenticated /v1/files/{id}/content.

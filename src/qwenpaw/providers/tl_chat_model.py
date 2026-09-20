@@ -29,6 +29,7 @@ from .tl_prompt_codec import (
     parse_response,
 )
 from .tl_transport import TLTransport
+from .tl_wire_log import log_wire
 
 
 class TLChatModel(ChatModelBase):
@@ -56,24 +57,46 @@ class TLChatModel(ChatModelBase):
         self.config = (config or transport.config).model_copy(deep=True)
         self.formatter = TLChatFormatter()
         if isinstance(output_reserve, bool) or output_reserve < 0:
-            raise TLError(
-                "configuration", "output_reserve must be non-negative"
-            )
+            raise TLError("configuration", "output_reserve must be non-negative")
         self.output_reserve = output_reserve
         self._token_counter = token_counter
+
+    def _diagnostic(self, event, payload, **context):
+        log_wire(
+            event=event,
+            payload=payload,
+            secrets=(
+                getattr(self.transport, "api_key", ""),
+                *getattr(self.transport, "custom_headers", {}).values(),
+            ),
+            model=self.model,
+            **context,
+        )
 
     async def _compile(
         self, messages, tools=None, tool_choice=None, structured_schema=None
     ):
         # Freeze the actual middleware output, never reconstruct agent memory.
         records = await self.formatter.format(deepcopy(messages))
-        return compile_prompt(
+        compiled = compile_prompt(
             records,
             tools=deepcopy(tools),
             tool_choice=deepcopy(tool_choice),
             structured_schema=deepcopy(structured_schema),
             token_counter=self._token_counter,
         )
+        self._diagnostic(
+            "tool_prompt_conversion",
+            {
+                "messages": records,
+                "tools": tools,
+                "tool_choice": tool_choice,
+                "mode": compiled.mode,
+                "system_prompt": compiled.system_prompt,
+                "user_payload": compiled.user_payload,
+            },
+        )
+        return compiled
 
     def _check_budget(self, compiled, payload=None):
         estimated = estimate_tokens(
@@ -105,8 +128,19 @@ class TLChatModel(ChatModelBase):
         if not isinstance(stream, bool):
             raise TLError("configuration", "stream must be a boolean")
         self._reject_options(kwargs)
-        compiled = await self._compile(messages, tools, tool_choice)
-        self._check_budget(compiled)
+        try:
+            compiled = await self._compile(messages, tools, tool_choice)
+            self._check_budget(compiled)
+        except Exception as exc:
+            self._diagnostic(
+                "error",
+                {
+                    "stage": "prompt_encode",
+                    "kind": type(exc).__name__,
+                    "message": str(exc),
+                },
+            )
+            raise
         if stream:
             return self._stream_response(compiled)
         blocks = await self._validated_response(compiled, stream=False)
@@ -165,6 +199,20 @@ class TLChatModel(ChatModelBase):
             text = "".join(chunks)
             try:
                 parsed = parse_response(text, compiled=compiled)
+                self._diagnostic(
+                    "tool_response_conversion",
+                    {
+                        "mode": compiled.mode,
+                        "raw_response": text,
+                        "blocks": [
+                            b.model_dump(mode="json") if hasattr(b, "model_dump") else b
+                            for b in parsed.blocks
+                        ],
+                        "structured": parsed.structured,
+                    },
+                    model_invocation_id=invocation_id,
+                    correction_attempt=attempt,
+                )
                 if preview is not None:
                     preview.clear("commit")
                 return (
@@ -173,15 +221,24 @@ class TLChatModel(ChatModelBase):
                     else parsed.blocks
                 )
             except TLError as exc:
+                self._diagnostic(
+                    "error",
+                    {
+                        "stage": exc.stage,
+                        "kind": exc.kind,
+                        "message": exc.message,
+                        "raw_response": text,
+                    },
+                    model_invocation_id=invocation_id,
+                    correction_attempt=attempt,
+                )
                 if first_error is not None:
                     if preview is not None:
                         preview.clear("invalid")
                     raise exc from first_error
                 if (
                     attempt >= self.config.json_correction_max_attempts
-                    or not is_correctable_json_error(
-                        exc, text, compiled=compiled
-                    )
+                    or not is_correctable_json_error(exc, text, compiled=compiled)
                 ):
                     if preview is not None:
                         preview.clear("invalid")
@@ -190,6 +247,12 @@ class TLChatModel(ChatModelBase):
                     preview.clear("correction")
                 first_error = exc
                 payload = build_correction_payload(compiled, text, exc)
+                self._diagnostic(
+                    "json_correction",
+                    {"user_payload": payload},
+                    model_invocation_id=invocation_id,
+                    correction_attempt=attempt + 1,
+                )
             finally:
                 if preview is not None:
                     preview.clear("error")
@@ -199,12 +262,8 @@ class TLChatModel(ChatModelBase):
         response_id = "tl_response_" + uuid4().hex
         if compiled.mode != "text":
             blocks = await self._validated_response(compiled, stream=True)
-            yield ChatResponse(
-                id=response_id, content=deepcopy(blocks), is_last=False
-            )
-            yield ChatResponse(
-                id=response_id, content=deepcopy(blocks), is_last=True
-            )
+            yield ChatResponse(id=response_id, content=deepcopy(blocks), is_last=False)
+            yield ChatResponse(id=response_id, content=deepcopy(blocks), is_last=True)
             return
         block_id = "tl_text_" + uuid4().hex
         chunks = []
@@ -226,9 +285,7 @@ class TLChatModel(ChatModelBase):
             is_last=True,
         )
 
-    async def generate_structured_output(
-        self, messages, structured_model, **kwargs
-    ):
+    async def generate_structured_output(self, messages, structured_model, **kwargs):
         tools = kwargs.pop("tools", None)
         choice = kwargs.pop("tool_choice", None)
         if tools or choice not in (None, "none"):

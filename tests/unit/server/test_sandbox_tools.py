@@ -1,9 +1,22 @@
+import sys
 from pathlib import Path
 
 import httpx
 import pytest
 
 from qwenpaw.server.sandbox_app import create_sandbox_app
+
+
+def python_command(source: str) -> str:
+    """Return a shell command that runs *source* on this interpreter.
+
+    Both argv entries are double-quoted, a form POSIX ``sh`` and Windows
+    ``cmd.exe`` both accept, so the sandbox tests do not depend on a
+    POSIX-only shell.  *source* must therefore avoid double quotes.
+    """
+    if '"' in source:
+        raise ValueError("source must not contain double quotes")
+    return f'"{sys.executable}" -c "{source}"'
 
 
 @pytest.fixture
@@ -56,7 +69,11 @@ async def test_shell_bounded_and_epoch_fenced(client):
         payload = {
             "call_id": "shell",
             "name": "shell",
-            "arguments": {"command": "printf 'x%.0s' {1..1100000}"},
+            "arguments": {
+                "command": python_command(
+                    "import sys; sys.stdout.write('x' * 1100000)"
+                )
+            },
         }
         result = await c.post("/invoke", headers=headers, json=payload)
         assert len(result.json()["result"]["stdout"]) == 1024 * 1024

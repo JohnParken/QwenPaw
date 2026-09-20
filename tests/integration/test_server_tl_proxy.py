@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+import httpx
 import pytest_asyncio
 from pydantic import ValidationError
 
@@ -128,7 +129,11 @@ process.on('SIGTERM', async () => {{await proxy.close(); process.exit(0);}});"""
 
 
 @pytest.mark.asyncio
-async def test_server_tl_remote_tool_approval_and_memory(proxy, tmp_path):
+@pytest.mark.parametrize("debug", [False, True])
+async def test_server_tl_remote_tool_approval_and_memory(
+    proxy, tmp_path, monkeypatch, debug
+):
+    monkeypatch.setenv("QWENPAW_MODEL_DEBUG", "1")
     url, seen = proxy
     definition = AssistantDefinition(
         version="tl-server-test",
@@ -167,14 +172,25 @@ async def test_server_tl_remote_tool_approval_and_memory(proxy, tmp_path):
         stop_session=AsyncMock(),
     )
     worker = Worker(config, RuntimeServices(repo, remote, factory))
-    await repo.submit(
-        "alice",
-        "web",
-        "same",
-        "r",
-        {"message": "Calculate 2+3. I like arithmetic."},
-        definition.version,
-    )
+    from qwenpaw.server.api import create_api
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=create_api(config, repo, None)),
+        base_url="http://test",
+        headers={"Authorization": "Bearer " + "s" * 32, "X-QwenPaw-User": "alice"},
+    ) as client:
+        submitted = await client.post(
+            "/v1/runs",
+            json={
+                "usrid": "alice",
+                "channelid": "web",
+                "sessionid": "same",
+                "request_id": "r",
+                "message": "Calculate 2+3. I like arithmetic.",
+                "debug": debug,
+            },
+        )
+        assert submitted.status_code == 202
     run = await repo.claim(worker.id, 60, 4)
     task = asyncio.create_task(worker.execute(run))
     try:
@@ -200,6 +216,41 @@ async def test_server_tl_remote_tool_approval_and_memory(proxy, tmp_path):
             await task
         assert (await repo.get_run("alice", run["id"]))["status"] == "completed"
         remote.invoke.assert_awaited_once()
+        diagnostics = [
+            e["payload"]
+            for e in await repo.events("alice", run["id"], 0)
+            if e["payload"].get("type") == "model_log"
+        ]
+        if debug:
+            kinds = {e["event"] for e in diagnostics}
+            assert {
+                "request",
+                "model_response",
+                "tool_prompt_conversion",
+                "tool_response_conversion",
+                "sse_event",
+            } <= kinds
+            assert all(e["run_id"] == run["id"] for e in diagnostics)
+            assert "tool_result" in json.dumps(diagnostics)
+            from qwenpaw.server.contracts import NotFound
+
+            with pytest.raises(NotFound):
+                await repo.events("bob", run["id"], 0)
+        else:
+            assert diagnostics == []
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=create_api(config, repo, None)),
+            base_url="http://test",
+            headers={"Authorization": "Bearer " + "s" * 32, "X-QwenPaw-User": "alice"},
+        ) as client:
+            streamed = await client.get(f"/v1/runs/{run['id']}/events")
+            assert streamed.status_code == 200
+            assert ('"model_log"' in streamed.text) is debug
+            assert "event: end" in streamed.text
+            denied = await client.get(
+                f"/v1/runs/{run['id']}/events", headers={"X-QwenPaw-User": "bob"}
+            )
+            assert denied.status_code == 404
         assert await MemoryService(config, repo).step()
         assert (await repo.memories("alice", "arithmetic"))[0][
             "text"

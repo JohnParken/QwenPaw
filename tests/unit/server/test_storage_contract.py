@@ -132,6 +132,36 @@ async def test_quota_full_user_cannot_starve_other_users(repo):
     assert await repo.claim("w3", 60, 1) is None
 
 
+async def test_tool_events_and_history_are_atomic_and_owned(repo):
+    run = await submit(repo)
+    claimed = await repo.claim("w", 60, 1)
+    ctx = context(claimed)
+    await repo.begin_tool(ctx, "call", "shell", {"command": "echo hello"})
+    approval = await repo.request_approval(ctx, "call", 60)
+    with pytest.raises(NotFound):
+        await repo.decide("bob", approval["id"], True)
+    await repo.decide("alice", approval["id"], True)
+    await repo.approval(ctx, approval["id"])
+    await repo.append(
+        ctx, [{"type": "tool", "tool_call_id": "call", "status": "running"}]
+    )
+    await repo.end_tool(ctx, "call", "failed", {"status": "error", "error": "test"})
+    await repo.end_tool(ctx, "call", "failed", {"status": "error", "error": "test"})
+    await repo.finish(ctx, "completed", {})
+    events = [e["payload"] for e in await repo.events("alice", run["id"], 0)]
+    states = [e["status"] for e in events if e.get("type") == "tool"]
+    assert states == ["preparing", "awaiting_approval", "running", "failed"]
+    assert events[-1] == {"type": "terminal", "status": "completed"}
+    history = await repo.messages("alice", run["session_id"])
+    saved = next(
+        r["payload"] for r in history if r["payload"].get("type") == "run_timeline"
+    )
+    assert saved["events"][0]["status"] == "failed"
+    assert saved["events"][0]["arguments"] == {"command": "echo hello"}
+    with pytest.raises(NotFound):
+        await repo.messages("bob", run["session_id"])
+
+
 async def test_expiry_requires_confirmed_stop_and_fences_old_worker(repo):
     await submit(repo)
     run = await repo.claim("old", 60, 4)

@@ -1639,6 +1639,8 @@ def is_correctable_json_error(
         return False
     try:
         _, end = json.JSONDecoder().raw_decode(stripped)
+    except RecursionError:
+        return False  # Nesting overflow cannot be repaired by syntax retry.
     except json.JSONDecodeError:
         end = None
     if end is not None and stripped[end:].strip():

@@ -1,0 +1,122 @@
+- generic [ref=f12e2]:
+  - complementary [ref=f12e3]:
+    - generic [ref=f12e5]:
+      - generic [ref=f12e6]: 🐾
+      - generic [ref=f12e7]:
+        - heading "QwenPaw Native" [level=1] [ref=f12e8]:
+          - text: QwenPaw
+          - generic [ref=f12e9]: Native
+        - paragraph [ref=f12e10]: 轻量原生测试验证台
+    - generic [ref=f12e11]:
+      - generic [ref=f12e12]:
+        - generic [ref=f12e13]: 当前生效 Agent
+        - generic [ref=f12e14]: Service
+      - combobox "切换当前 Agent" [disabled] [ref=f12e15] [cursor=pointer]:
+        - option "default" [selected]
+    - navigation "功能页" [ref=f12e16]:
+      - button "💬 核心会话" [ref=f12e17] [cursor=pointer]:
+        - generic [ref=f12e18]: 💬
+        - text: 核心会话
+      - button "📁 工作区文件" [ref=f12e19] [cursor=pointer]:
+        - generic [ref=f12e20]: 📁
+        - text: 工作区文件
+      - button "📥 收件箱与任务" [ref=f12e21] [cursor=pointer]:
+        - generic [ref=f12e22]: 📥
+        - text: 收件箱与任务
+      - button "🧩 智能体技能" [ref=f12e23] [cursor=pointer]:
+        - generic [ref=f12e24]: 🧩
+        - text: 智能体技能
+      - button "⚙️ 管理与配置" [ref=f12e25] [cursor=pointer]:
+        - generic [ref=f12e26]: ⚙️
+        - text: 管理与配置
+    - generic [ref=f12e27]:
+      - generic [ref=f12e28]:
+        - generic [ref=f12e29]: 会话列表
+        - generic [ref=f12e30]:
+          - button "+ 新建" [ref=f12e31] [cursor=pointer]
+          - button "刷新" [ref=f12e32] [cursor=pointer]
+      - generic [ref=f12e33]:
+        - button "0c8bf9b7-4c6a-46f0-9e91-c36e457e6546" [ref=f12e111] [cursor=pointer]
+        - button "demo-smoke" [ref=f12e113] [cursor=pointer]
+      - combobox [ref=f12e34]:
+        - option "选择服务会话" [selected]
+        - option "0c8bf9b7-4c6a-46f0-9e91-c36e457e6546"
+        - option "demo-smoke"
+    - button "服务已连接 · default" [ref=f12e115] [cursor=pointer]
+  - generic [ref=f12e39]:
+    - banner [ref=f12e40]:
+      - generic [ref=f12e41]:
+        - generic [ref=f12e42]: 未选择服务会话
+        - generic [ref=f12e43]: "服务: mock-stream-demo"
+        - generic [ref=f12e44]: "Agent: default"
+        - generic [ref=f12e45]: 服务聊天 /v1
+      - generic [ref=f12e46]:
+        - generic [ref=f12e116]:
+          - generic [ref=f12e117]: "Context: 就绪"
+          - generic [ref=f12e118]: 等待对话生成以计算窗口消耗
+        - generic "Tool Guard 工具安全审批策略" [ref=f12e51]:
+          - generic [ref=f12e52]: 审批策略
+          - combobox "审批策略由服务端平台配置决定" [disabled] [ref=f12e110] [cursor=pointer]:
+            - option "AUTO (全自动免密)"
+            - option "SMART (智能高危审批)" [selected]
+            - option "STRICT (严格全部审批)"
+            - option "OFF (关闭审批限制)"
+        - generic [ref=f12e54]: 流式状态：空闲
+        - button "📋 协议日志 3" [ref=f12e119] [cursor=pointer]:
+          - generic [ref=f12e56]: 📋 协议日志
+          - generic [ref=f12e57]: "3"
+    - group "连接现有后端" [ref=f12e59]:
+      - generic [ref=f12e61]:
+        - generic [ref=f12e62]: 🔗 后端连接与凭据
+        - paragraph [ref=f12e63]: 服务已连接 · ok · 用户 default
+      - generic [ref=f12e64]:
+        - generic [ref=f12e65]:
+          - text: 聊天模式
+          - combobox "聊天模式" [ref=f12e66]:
+            - option "本地 Console 管理"
+            - option "服务聊天 /v1" [selected]
+        - generic [ref=f12e67]: "开发用户: default · token 仅由 Vite 代理注入"
+        - generic [ref=f12e68]:
+          - generic [ref=f12e69]:
+            - text: 访问令牌
+            - textbox "访问令牌" [disabled] [ref=f12e70]:
+              - /placeholder: 未启用鉴权可留空
+          - button "连接 / 检查" [ref=f12e71] [cursor=pointer]
+          - button "清除凭据" [disabled] [ref=f12e72] [cursor=pointer]
+        - group [ref=f12e73]:
+          - generic "使用账号密码登录" [ref=f12e74] [cursor=pointer]
+    - status [ref=f12e75]: 连接成功
+    - generic [ref=f12e76]:
+      - group "功能验证" [ref=f12e77]:
+        - generic [ref=f12e79]:
+          - log "聊天消息" [ref=f12e80]
+          - generic [ref=f12e81]:
+            - generic [ref=f12e82]: "⚡ 快捷能力测试:"
+            - button "基础问答" [ref=f12e83] [cursor=pointer]
+            - button "深度推理 (R1)" [ref=f12e84] [cursor=pointer]
+            - button "文件读写工具" [ref=f12e85] [cursor=pointer]
+            - button "Shell 工具" [ref=f12e86] [cursor=pointer]
+            - button "触发安全审批" [ref=f12e87] [cursor=pointer]
+          - generic [ref=f12e89]:
+            - textbox "输入给 QwenPaw Agent 的指令... (Enter 发送，Shift+Enter 换行)" [ref=f12e90]
+            - generic [ref=f12e91]:
+              - generic [ref=f12e92]:
+                - generic [ref=f12e93] [cursor=pointer]: 📎 上传附件
+                - generic [ref=f12e120]: 当前服务未启用附件存储
+                - button "加载历史" [ref=f12e94] [cursor=pointer]
+              - button "发送 ↵" [ref=f12e96] [cursor=pointer]
+      - complementary [ref=f12e97]:
+        - generic [ref=f12e98]:
+          - heading "📋 接口与 SSE 请求日志" [level=2] [ref=f12e99]
+          - generic [ref=f12e100]:
+            - button "导出" [ref=f12e101] [cursor=pointer]
+            - button "清空" [ref=f12e102] [cursor=pointer]
+            - button "✕" [ref=f12e103] [cursor=pointer]
+        - textbox "筛选接口，例如 /console/chat 或 401" [ref=f12e105]
+        - generic [ref=f12e106]:
+          - group [ref=f12e121]:
+            - generic "GET /api/service/sessions?limit=100 · 200 · 2 ms" [ref=f12e122] [cursor=pointer]
+          - group [ref=f12e123]:
+            - generic "GET /api/service/assistant · 200 · 4 ms" [ref=f12e124] [cursor=pointer]
+          - group [ref=f12e125]:
+            - generic "GET /api/service/health · 200 · 16 ms" [ref=f12e126] [cursor=pointer]

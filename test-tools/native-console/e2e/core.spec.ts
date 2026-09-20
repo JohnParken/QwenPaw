@@ -147,6 +147,7 @@ test("会话创建、SSE delta/snapshot 去重、未知工具事件日志和停�
     user_id: "default",
     channel: "console",
     stream: true,
+    request_context: { capabilities: { tl_preview: true } },
   });
   expect((send.body as any).input[0].content[0]).toEqual({
     type: "text",

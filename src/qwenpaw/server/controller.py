@@ -18,6 +18,10 @@ from fastapi.responses import JSONResponse
 
 from .contracts import Conflict, ExecutionContext, NotFound
 
+_MAX_NDJSON_BUFFER = 16 * 1024 * 1024
+_MAX_STREAM_TEXT_BYTES = 1024 * 1024
+_NDJSON_READ_CHUNK = 64 * 1024
+
 
 class Kubernetes:
     def __init__(self, config):
@@ -205,6 +209,81 @@ class SandboxController:
     async def acquire(self, ctx):
         await self.repo.sandbox_acquire(ctx)
 
+    async def _read_stream(self, response, ctx, tool_call_id):
+        """Consume bounded sandbox NDJSON and persist output as it arrives."""
+        buffer = bytearray()
+        terminal = None
+        stream_bytes = {"stdout": 0, "stderr": 0}
+
+        async def consume(line):
+            nonlocal terminal
+            if line.endswith(b"\r"):
+                line = line[:-1]
+            if not line:
+                raise Conflict("Sandbox returned an empty NDJSON event")
+            try:
+                event = json.loads(line)
+            except (TypeError, ValueError) as exc:
+                raise Conflict("Sandbox returned invalid NDJSON") from exc
+            if not isinstance(event, dict):
+                raise Conflict("Sandbox returned an invalid NDJSON event")
+            if terminal is not None:
+                raise Conflict("Sandbox returned an event after its result")
+            event_type = event.get("type")
+            if event_type == "output":
+                stream = event.get("stream")
+                text = event.get("text")
+                if stream not in {"stdout", "stderr"} or not isinstance(text, str):
+                    raise Conflict("Sandbox returned invalid output event")
+                size = len(text.encode("utf-8"))
+                if (
+                    size > _MAX_STREAM_TEXT_BYTES
+                    or stream_bytes[stream] + size > _MAX_STREAM_TEXT_BYTES
+                ):
+                    raise Conflict("Sandbox output exceeds 1 MiB per stream")
+                stream_bytes[stream] += size
+                await self.repo.append(
+                    ctx,
+                    [
+                        {
+                            "type": "tool_output",
+                            "tool_call_id": tool_call_id,
+                            "stream": stream,
+                            "text": text,
+                        }
+                    ],
+                )
+                return
+            if event_type == "result" and terminal is None:
+                result = event.get("result")
+                if not isinstance(result, dict):
+                    raise Conflict("Sandbox returned an invalid result event")
+                if result.get("call_id") != tool_call_id:
+                    raise Conflict("Sandbox returned a result for another tool call")
+                terminal = result
+                return
+            raise Conflict("Sandbox returned an unexpected NDJSON event")
+
+        async for chunk in response.aiter_bytes():
+            for offset in range(0, len(chunk), _NDJSON_READ_CHUNK):
+                buffer.extend(chunk[offset : offset + _NDJSON_READ_CHUNK])
+                while True:
+                    newline = buffer.find(b"\n")
+                    if newline < 0:
+                        break
+                    line = bytes(buffer[:newline])
+                    del buffer[: newline + 1]
+                    if len(line) > _MAX_NDJSON_BUFFER:
+                        raise Conflict("Sandbox NDJSON event exceeds buffer limit")
+                    await consume(line)
+                if len(buffer) > _MAX_NDJSON_BUFFER:
+                    raise Conflict("Sandbox NDJSON buffer exceeds limit")
+        if buffer:
+            raise Conflict("Sandbox returned an incomplete NDJSON event")
+        if terminal is None:
+            raise Conflict("Sandbox stream ended without a result")
+        return terminal
+
     async def invoke(self, payload):
         ctx = ExecutionContext(**payload["context"])
         # Recheck the immutable platform catalog at this boundary as well.
@@ -230,27 +309,36 @@ class SandboxController:
             async with httpx.AsyncClient(
                 trust_env=False, timeout=spec.timeout + 10
             ) as client:
+                stream_shell = spec.name == "shell"
+                request = {
+                    "call_id": payload["call_id"],
+                    "name": spec.name,
+                    "arguments": payload["arguments"],
+                    "timeout": spec.timeout,
+                    "epoch": ctx.epoch,
+                }
+                if stream_shell:
+                    request["stream"] = True
                 async with client.stream(
                     "POST",
                     endpoint + "/invoke",
                     headers={
                         "Authorization": "Bearer " + self.kube.token(ctx.session_id),
                     },
-                    json={
-                        "call_id": payload["call_id"],
-                        "name": spec.name,
-                        "arguments": payload["arguments"],
-                        "timeout": spec.timeout,
-                        "epoch": ctx.epoch,
-                    },
+                    json=request,
                 ) as response:
                     response.raise_for_status()
-                    body = bytearray()
-                    async for chunk in response.aiter_bytes():
-                        body.extend(chunk)
-                        if len(body) > 32 * 1024 * 1024:
-                            raise Conflict("Sandbox response exceeds 32 MiB")
-                    result = json.loads(body)
+                    if stream_shell:
+                        result = await self._read_stream(
+                            response, ctx, payload["call_id"]
+                        )
+                    else:
+                        body = bytearray()
+                        async for chunk in response.aiter_bytes():
+                            body.extend(chunk)
+                            if len(body) > 32 * 1024 * 1024:
+                                raise Conflict("Sandbox response exceeds 32 MiB")
+                        result = json.loads(body)
                 if spec.name == "publish_file" and result.get("status") == "ok":
                     import base64
 
@@ -304,9 +392,7 @@ class SandboxController:
         content = await self.objects.get(record["key"])
         context = payload.get("context")
         ctx = ExecutionContext(**context) if context else None
-        async with self.repo.session_import_guard(
-            payload["user_id"], session_id, ctx
-        ):
+        async with self.repo.session_import_guard(payload["user_id"], session_id, ctx):
             root = self.root(session_id)
             await asyncio.to_thread(self._write_attachment, root, record["id"], content)
 

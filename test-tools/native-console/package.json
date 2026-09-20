@@ -21,7 +21,8 @@
     "live:services": "node scripts/manage-live.mjs start-services",
     "live:console": "node scripts/manage-live.mjs start-console",
     "live:start": "node scripts/manage-live.mjs start-all",
-    "live:stop": "node scripts/manage-live.mjs stop"
+    "live:stop": "node scripts/manage-live.mjs stop",
+    "service:tl": "node scripts/service-tl.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.61.1",

@@ -11,6 +11,7 @@ as constructor parameters and does not build them internally.
 
 from __future__ import annotations
 
+from copy import deepcopy
 import logging
 import re
 import uuid
@@ -24,7 +25,13 @@ from agentscope.event import (
     TextBlockEndEvent,
     TextBlockStartEvent,
 )
-from agentscope.message import HintBlock, Msg, TextBlock
+from agentscope.message import (
+    DataBlock,
+    HintBlock,
+    Msg,
+    TextBlock,
+    ToolResultBlock,
+)
 from agentscope.model import FinishedReason
 from agentscope.state import AgentState
 from agentscope.tool import Toolkit
@@ -835,6 +842,59 @@ class QwenPawAgent(CodingModeMixin, Agent):
         self._coerce_tool_call_input(tool_call)
         async for evt in super()._execute_tool_call(tool_call, kept_rules):
             yield evt
+
+    async def _split_tool_result_for_compression(
+        self,
+        tool_result: ToolResultBlock,
+    ) -> tuple[ToolResultBlock, ToolResultBlock | None]:
+        """Keep delivered files out of TL's text-only model history.
+
+        ``send_file_to_user`` emits its incremental ``DataBlock`` before this
+        hook runs, so channels still receive the attachment.  The accumulated
+        result is used only for token counting and model history; TL receives
+        a textual delivery receipt there instead of an unsupported media
+        block.
+        """
+        formatter = self._get_active_formatter()
+        if (
+            tool_result.name == "send_file_to_user"
+            and is_tl_formatter(formatter)
+            and isinstance(tool_result.output, list)
+            and any(
+                isinstance(block, DataBlock)
+                for block in tool_result.output
+            )
+        ):
+            receipt_lines: list[str] = []
+            for block in tool_result.output:
+                if isinstance(block, TextBlock):
+                    receipt_lines.append(block.text)
+                    continue
+                if not isinstance(block, DataBlock):
+                    continue
+                source = block.source
+                name = block.name or "unnamed file"
+                location = getattr(source, "url", None)
+                media_type = getattr(source, "media_type", None)
+                detail = f"Delivered attachment to user: {name}"
+                if location is not None:
+                    detail += f" (path: {location}"
+                    if media_type:
+                        detail += f", media type: {media_type}"
+                    detail += ")"
+                elif media_type:
+                    detail += f" (media type: {media_type})"
+                receipt_lines.append(detail)
+
+            text_only_result = deepcopy(tool_result)
+            text_only_result.output = [
+                TextBlock(text="\n".join(receipt_lines)),
+            ]
+            return await super()._split_tool_result_for_compression(
+                text_only_result,
+            )
+
+        return await super()._split_tool_result_for_compression(tool_result)
 
     # pylint: disable=too-many-branches,too-many-statements
     async def _reasoning(

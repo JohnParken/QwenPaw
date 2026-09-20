@@ -34,7 +34,8 @@ class _SSEParser:
     """Small stateful SSE parser with strict TL event validation."""
 
     def __init__(
-        self, max_event_bytes: int,
+        self,
+        max_event_bytes: int,
         on_event: Callable[[str, str], None] | None = None,
     ) -> None:
         self._on_event = on_event
@@ -117,9 +118,7 @@ class _SSEParser:
             self._scan_index = 0
             return line, delimiter_bytes
         self._scan_index = (
-            len(self._buffer) - 1
-            if self._buffer.endswith("\r")
-            else len(self._buffer)
+            len(self._buffer) - 1 if self._buffer.endswith("\r") else len(self._buffer)
         )
         return None
 
@@ -287,9 +286,11 @@ class TLTransport:
 
     def _log_wire(self, event: str, payload: Any, **context: Any) -> None:
         log_wire(
-            event=event, payload=payload,
+            event=event,
+            payload=payload,
             secrets=tuple(
-                value for value in (self.api_key, *self.custom_headers.values())
+                value
+                for value in (self.api_key, *self.custom_headers.values())
                 if isinstance(value, str) and value
             ),
             **context,
@@ -353,26 +354,70 @@ class TLTransport:
         attempt_id = self._new_attempt_id()
         self.last_termination = None
         deadline = time.monotonic() + self.config.timeout_seconds
-        async with self._attempt_client() as client:
-            session_id = await self._init_session(
-                system_prompt,
-                attempt_id,
-                client,
-                deadline,
+        chat_request_id = self._new_request_id()
+        diagnostics = []
+        diagnostic_chars = 0
+        try:
+            async with self._attempt_client() as client:
+                session_id = await self._init_session(
+                    system_prompt,
+                    attempt_id,
+                    client,
+                    deadline,
+                )
+                inner = self._chat_text(
+                    session_id,
+                    user_payload,
+                    stream,
+                    attempt_id,
+                    client,
+                    deadline,
+                    request_id=chat_request_id,
+                )
+                try:
+                    async for text in inner:
+                        if diagnostic_chars < 32768:
+                            diagnostics.append(text[: 32768 - diagnostic_chars])
+                        diagnostic_chars += len(text)
+                        yield text
+                finally:
+                    await inner.aclose()
+            self._log_wire(
+                "model_response",
+                {
+                    "text": "".join(diagnostics),
+                    "total_chars": diagnostic_chars,
+                    "text_truncated": diagnostic_chars > 32768,
+                    "termination": self.last_termination,
+                },
+                attempt_id=attempt_id,
+                request_id=chat_request_id,
+                session_id=session_id,
+                direction="tl_to_qwenpaw",
             )
-            inner = self._chat_text(
-                session_id,
-                user_payload,
-                stream,
-                attempt_id,
-                client,
-                deadline,
+        except (asyncio.CancelledError, GeneratorExit):
+            self._log_wire(
+                "cancelled", {"stage": "model_stream"}, attempt_id=attempt_id
             )
-            try:
-                async for text in inner:
-                    yield text
-            finally:
-                await inner.aclose()
+            raise
+        except Exception as exc:
+            self._log_wire(
+                "error",
+                {
+                    "stage": getattr(exc, "stage", "model_stream"),
+                    "kind": getattr(exc, "kind", type(exc).__name__),
+                    "message": (
+                        str(exc)
+                        if isinstance(exc, TLError)
+                        else "Model transport failed"
+                    ),
+                    "partial_text": "".join(diagnostics),
+                },
+                attempt_id=attempt_id,
+                request_id=getattr(exc, "request_id", None),
+                session_id=getattr(exc, "session_id", None),
+            )
+            raise
 
     async def _init_session(
         self,
@@ -460,8 +505,10 @@ class TLTransport:
         attempt_id: str,
         client: httpx.AsyncClient,
         deadline: float,
+        *,
+        request_id: str | None = None,
     ) -> AsyncIterator[str]:
-        request_id = self._new_request_id()
+        request_id = request_id or self._new_request_id()
         body = {
             "appId": self.config.app_id,
             "trCode": self.config.tr_code,
@@ -548,9 +595,12 @@ class TLTransport:
         parser = _SSEParser(
             self.config.max_sse_event_bytes,
             on_event=lambda name, data: self._log_wire(
-                "sse_event", {"event": name, "data": data},
-                attempt_id=attempt_id, request_id=request_id,
-                session_id=session_id, direction="tl_to_qwenpaw",
+                "sse_event",
+                {"event": name, "data": data},
+                attempt_id=attempt_id,
+                request_id=request_id,
+                session_id=session_id,
+                direction="tl_to_qwenpaw",
             ),
         )
         response_bytes = 0
@@ -684,9 +734,13 @@ class TLTransport:
                         session_id=session_id,
                     )
         self._log_wire(
-            "response_body", response_body,
-            path=path, attempt_id=attempt_id, request_id=request_id,
-            session_id=session_id, direction="tl_to_qwenpaw",
+            "response_body",
+            response_body,
+            path=path,
+            attempt_id=attempt_id,
+            request_id=request_id,
+            session_id=session_id,
+            direction="tl_to_qwenpaw",
         )
         return bytes(response_body)
 
@@ -705,11 +759,6 @@ class TLTransport:
         session_id: str | None = None,
     ) -> AsyncIterator[httpx.Response]:
         headers = self._headers(stream)
-        self._log_wire(
-            "request", body, path=path,
-            attempt_id=attempt_id, request_id=request_id,
-            session_id=session_id, direction="qwenpaw_to_tl",
-        )
         response: httpx.Response | None = None
         try:
             request = client.build_request(
@@ -717,6 +766,19 @@ class TLTransport:
                 f"{self.base_url}{path}",
                 content=body,
                 headers=headers,
+            )
+            # Log the fully materialized request metadata.  ``log_wire`` owns
+            # redaction, so headers and URL query values remain safe to emit.
+            self._log_wire(
+                "request",
+                body,
+                path=path,
+                url=str(request.url),
+                headers=dict(request.headers),
+                attempt_id=attempt_id,
+                request_id=request_id,
+                session_id=session_id,
+                direction="qwenpaw_to_tl",
             )
             try:
                 response = await asyncio.wait_for(
@@ -740,10 +802,15 @@ class TLTransport:
                 ) from exc
             self._log_wire(
                 "response_headers",
-                {"status": response.status_code,
-                 "content_type": response.headers.get("content-type", "")},
-                path=path, attempt_id=attempt_id, request_id=request_id,
-                session_id=session_id, direction="tl_to_qwenpaw",
+                {
+                    "status": response.status_code,
+                    "content_type": response.headers.get("content-type", ""),
+                },
+                path=path,
+                attempt_id=attempt_id,
+                request_id=request_id,
+                session_id=session_id,
+                direction="tl_to_qwenpaw",
             )
             if not 200 <= response.status_code < 300:
                 raise TLError(
@@ -760,9 +827,11 @@ class TLTransport:
             raise
         except TLError as exc:
             self._log_wire(
-                "error", {"stage": exc.stage, "kind": exc.kind,
-                          "message": exc.message},
-                path=path, attempt_id=attempt_id, request_id=request_id,
+                "error",
+                {"stage": exc.stage, "kind": exc.kind, "message": exc.message},
+                path=path,
+                attempt_id=attempt_id,
+                request_id=request_id,
                 session_id=session_id,
             )
             raise
@@ -820,24 +889,16 @@ class TLTransport:
                 session_id=session_id,
             )
             idle_timeout = self.config.stream_idle_timeout_seconds
-            timeout = (
-                min(remaining, idle_timeout) if idle_timeout else remaining
-            )
+            timeout = min(remaining, idle_timeout) if idle_timeout else remaining
             try:
-                raw = await asyncio.wait_for(
-                    iterator.__anext__(), timeout=timeout
-                )
+                raw = await asyncio.wait_for(iterator.__anext__(), timeout=timeout)
             except StopAsyncIteration:
                 return
             except asyncio.CancelledError:
                 raise
             except TimeoutError as exc:
                 timed_out = time.monotonic() >= deadline
-                kind = (
-                    "timeout"
-                    if timed_out or not idle_timeout
-                    else "idle_timeout"
-                )
+                kind = "timeout" if timed_out or not idle_timeout else "idle_timeout"
                 message = (
                     "TL attempt timed out"
                     if kind == "timeout"
